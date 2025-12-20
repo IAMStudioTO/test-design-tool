@@ -55,16 +55,17 @@ app.post("/render/mp4", async (req, res) => {
   // Cartella temporanea per progetto + output
   const workdir = await fs.mkdtemp(path.join(os.tmpdir(), "bct-render-"));
   const entry = path.join(workdir, "entry.jsx");
+  const rootFile = path.join(workdir, "remotionRoot.jsx");
   const out = path.join(workdir, "out.mp4");
 
-  // Piccolo motion template: bg + headline che entra + subheadline fade
-  const code = `
+  // 1) File con le Composition (RemotionRoot)
+  const rootCode = `
 import React from "react";
 import {Composition, AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig} from "remotion";
 
 const Template = ({headline, subheadline, palette}) => {
   const frame = useCurrentFrame();
-  const {fps, width, height} = useVideoConfig();
+  const {width, height} = useVideoConfig();
 
   const titleY = interpolate(frame, [0, 18], [40, 0], {extrapolateRight: "clamp"});
   const titleOpacity = interpolate(frame, [0, 10], [0, 1], {extrapolateRight: "clamp"});
@@ -136,12 +137,19 @@ export const RemotionRoot = () => {
 };
 `;
 
+  // 2) Entry Remotion con registerRoot (quello che Remotion richiede)
+  const entryCode = `
+import {registerRoot} from "remotion";
+import {RemotionRoot} from "./remotionRoot.jsx";
+registerRoot(RemotionRoot);
+`;
+
   try {
-    await fs.writeFile(entry, code, "utf8");
+    await fs.writeFile(rootFile, rootCode, "utf8");
+    await fs.writeFile(entry, entryCode, "utf8");
 
     const bundleLocation = await bundle({
       entryPoint: entry,
-      // Workdir isolato; Remotion bundler crea la bundle qui
       outDir: path.join(workdir, "bundle"),
       enableCaching: true
     });
