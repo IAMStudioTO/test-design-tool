@@ -1,4 +1,13 @@
+"use client";
+
+import { useState } from "react";
+
 export default function Home() {
+  const [headline, setHeadline] = useState("Titolo di esempio");
+  const [subheadline, setSubheadline] = useState(
+    "Sottotitolo o descrizione breve, sempre dentro le regole."
+  );
+
   return (
     <main
       style={{
@@ -10,7 +19,7 @@ export default function Home() {
         alignItems: "start"
       }}
     >
-      {/* Pannello controlli (per ora solo placeholder) */}
+      {/* Pannello controlli */}
       <section
         style={{
           border: "1px solid #e5e7eb",
@@ -19,9 +28,42 @@ export default function Home() {
         }}
       >
         <h2 style={{ margin: 0, fontSize: 18 }}>Contenuti</h2>
-        <p style={{ marginTop: 8, color: "#4b5563", fontSize: 14 }}>
-          Nel prossimo step aggiungiamo gli input (headline, subheadline, ecc.).
-        </p>
+
+        <div style={{ marginTop: 16 }}>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>
+            Headline
+          </label>
+          <input
+            value={headline}
+            onChange={(e) => setHeadline(e.target.value)}
+            style={{
+              width: "100%",
+              marginTop: 4,
+              padding: 8,
+              borderRadius: 6,
+              border: "1px solid #d1d5db"
+            }}
+          />
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>
+            Subheadline
+          </label>
+          <textarea
+            value={subheadline}
+            onChange={(e) => setSubheadline(e.target.value)}
+            rows={3}
+            style={{
+              width: "100%",
+              marginTop: 4,
+              padding: 8,
+              borderRadius: 6,
+              border: "1px solid #d1d5db",
+              resize: "none"
+            }}
+          />
+        </div>
 
         <div style={{ marginTop: 16, fontSize: 14 }}>
           <div><strong>Formato:</strong> 1080×1080</div>
@@ -45,20 +87,38 @@ export default function Home() {
             boxShadow: "0 20px 60px rgba(0,0,0,0.25)"
           }}
         >
-          <div style={{ fontSize: 14, opacity: 0.8 }}>TEMPLATE 01</div>
+          <div style={{ fontSize: 14, opacity: 0.8 }}>
+            TEMPLATE 01
+          </div>
 
           <div>
-            <div style={{ fontSize: 44, lineHeight: 1.05, fontWeight: 700 }}>
-              Titolo di esempio
+            <div
+              style={{
+                fontSize: 44,
+                lineHeight: 1.05,
+                fontWeight: 700
+              }}
+            >
+              {headline}
             </div>
-            <div style={{ marginTop: 16, fontSize: 18, opacity: 0.9 }}>
-              Sottotitolo o descrizione breve, sempre dentro le regole.
+
+            <div
+              style={{
+                marginTop: 16,
+                fontSize: 18,
+                opacity: 0.9
+              }}
+            >
+              {subheadline}
             </div>
           </div>
 
-          <div style={{ fontSize: 14, opacity: 0.8 }}>iamstudio.to</div>
+          <div style={{ fontSize: 14, opacity: 0.8 }}>
+            iamstudio.to
+          </div>
         </div>
       </section>
     </main>
   );
 }
+
