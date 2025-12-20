@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 
+const HEADLINE_MAX = 40;
+const SUBHEADLINE_MAX = 90;
+
 export default function Home() {
-  const [headline, setHeadline] = useState("Titolo di esempio");
-  const [subheadline, setSubheadline] = useState(
-    "Sottotitolo o descrizione breve, sempre dentro le regole."
-  );
+  const [headline, setHeadline] = useState("Ciao");
+  const [subheadline, setSubheadline] = useState("Come stai?");
 
   return (
     <main
@@ -29,12 +30,12 @@ export default function Home() {
       >
         <h2 style={{ margin: 0, fontSize: 18 }}>Contenuti</h2>
 
+        {/* Headline */}
         <div style={{ marginTop: 16 }}>
-          <label style={{ fontSize: 12, fontWeight: 600 }}>
-            Headline
-          </label>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>Headline</label>
           <input
             value={headline}
+            maxLength={HEADLINE_MAX}
             onChange={(e) => setHeadline(e.target.value)}
             style={{
               width: "100%",
@@ -44,14 +45,17 @@ export default function Home() {
               border: "1px solid #d1d5db"
             }}
           />
+          <div style={{ fontSize: 11, marginTop: 4, color: "#6b7280" }}>
+            {headline.length}/{HEADLINE_MAX} caratteri
+          </div>
         </div>
 
+        {/* Subheadline */}
         <div style={{ marginTop: 12 }}>
-          <label style={{ fontSize: 12, fontWeight: 600 }}>
-            Subheadline
-          </label>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>Subheadline</label>
           <textarea
             value={subheadline}
+            maxLength={SUBHEADLINE_MAX}
             onChange={(e) => setSubheadline(e.target.value)}
             rows={3}
             style={{
@@ -63,11 +67,18 @@ export default function Home() {
               resize: "none"
             }}
           />
+          <div style={{ fontSize: 11, marginTop: 4, color: "#6b7280" }}>
+            {subheadline.length}/{SUBHEADLINE_MAX} caratteri
+          </div>
         </div>
 
         <div style={{ marginTop: 16, fontSize: 14 }}>
-          <div><strong>Formato:</strong> 1080×1080</div>
-          <div><strong>Template:</strong> 01 (static)</div>
+          <div>
+            <strong>Formato:</strong> 1080×1080
+          </div>
+          <div>
+            <strong>Template:</strong> 01 (static)
+          </div>
         </div>
       </section>
 
@@ -87,16 +98,15 @@ export default function Home() {
             boxShadow: "0 20px 60px rgba(0,0,0,0.25)"
           }}
         >
-          <div style={{ fontSize: 14, opacity: 0.8 }}>
-            TEMPLATE 01
-          </div>
+          <div style={{ fontSize: 14, opacity: 0.8 }}>TEMPLATE 01</div>
 
           <div>
             <div
               style={{
                 fontSize: 44,
                 lineHeight: 1.05,
-                fontWeight: 700
+                fontWeight: 700,
+                wordBreak: "break-word"
               }}
             >
               {headline}
@@ -106,19 +116,17 @@ export default function Home() {
               style={{
                 marginTop: 16,
                 fontSize: 18,
-                opacity: 0.9
+                opacity: 0.9,
+                wordBreak: "break-word"
               }}
             >
               {subheadline}
             </div>
           </div>
 
-          <div style={{ fontSize: 14, opacity: 0.8 }}>
-            iamstudio.to
-          </div>
+          <div style={{ fontSize: 14, opacity: 0.8 }}>iamstudio.to</div>
         </div>
       </section>
     </main>
   );
 }
-
