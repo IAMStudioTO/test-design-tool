@@ -1,10 +1,10 @@
 {
   "name": "branded-creative-tool-render",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": "20.x"
   },
   "scripts": {
     "start": "node server.js"
@@ -13,6 +13,8 @@
     "@remotion/bundler": "^4.0.0",
     "@remotion/renderer": "^4.0.0",
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   }
 }
