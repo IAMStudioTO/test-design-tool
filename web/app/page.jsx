@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { toPng } from "html-to-image";
 
 const HEADLINE_MAX = 40;
 const SUBHEADLINE_MAX = 90;
@@ -35,6 +36,20 @@ export default function Home() {
   const [paletteKey, setPaletteKey] = useState("dark");
 
   const palette = PALETTES[paletteKey];
+  const canvasRef = useRef(null);
+
+  const exportPng = async () => {
+    if (!canvasRef.current) return;
+
+    const dataUrl = await toPng(canvasRef.current, {
+      pixelRatio: 2
+    });
+
+    const link = document.createElement("a");
+    link.download = "branded-template.png";
+    link.href = dataUrl;
+    link.click();
+  };
 
   return (
     <main
@@ -99,7 +114,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Palette selector */}
+        {/* Palette */}
         <div style={{ marginTop: 16 }}>
           <label style={{ fontSize: 12, fontWeight: 600 }}>
             Palette colore
@@ -123,62 +138,48 @@ export default function Home() {
           </select>
         </div>
 
-        <div style={{ marginTop: 16, fontSize: 14 }}>
-          <div><strong>Formato:</strong> 1080×1080</div>
-          <div><strong>Template:</strong> 01 (static)</div>
-        </div>
+        {/* Export */}
+        <button
+          onClick={exportPng}
+          style={{
+            marginTop: 24,
+            width: "100%",
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "none",
+            background: "#111827",
+            color: "white",
+            fontWeight: 600,
+            cursor: "pointer"
+          }}
+        >
+          Esporta PNG
+        </button>
       </section>
 
-      {/* Anteprima template */}
+      {/* Canvas */}
       <section>
         <div
+          ref={canvasRef}
           style={{
-            width: 540,
-            aspectRatio: "1 / 1",
+            width: 1080,
+            height: 1080,
             background: palette.background,
             borderRadius: 24,
-            padding: 40,
+            padding: 80,
             color: palette.headline,
             display: "flex",
             flexDirection: "column",
-            justifyContent: "space-between",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.25)"
+            justifyContent: "space-between"
           }}
         >
-          <div style={{ fontSize: 14, color: palette.meta }}>
+          <div style={{ fontSize: 28, color: palette.meta }}>
             TEMPLATE 01
           </div>
 
           <div>
             <div
               style={{
-                fontSize: 44,
-                lineHeight: 1.05,
-                fontWeight: 700,
-                color: palette.headline,
-                wordBreak: "break-word"
-              }}
-            >
-              {headline}
-            </div>
+                fontSize: 88,
+                lineHe
 
-            <div
-              style={{
-                marginTop: 16,
-                fontSize: 18,
-                color: palette.subheadline,
-                wordBreak: "break-word"
-              }}
-            >
-              {subheadline}
-            </div>
-          </div>
-
-          <div style={{ fontSize: 14, color: palette.meta }}>
-            iamstudio.to
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
