@@ -30,10 +30,18 @@ const PALETTES = {
   }
 };
 
+function downloadDataUrl(dataUrl, filename) {
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = dataUrl;
+  link.click();
+}
+
 export default function Home() {
   const [headline, setHeadline] = useState("Ciao");
   const [subheadline, setSubheadline] = useState("Come stai?");
   const [paletteKey, setPaletteKey] = useState("dark");
+  const [isExporting, setIsExporting] = useState(false);
 
   const palette = PALETTES[paletteKey];
   const canvasRef = useRef(null);
@@ -41,14 +49,22 @@ export default function Home() {
   const exportPng = async () => {
     if (!canvasRef.current) return;
 
-    const dataUrl = await toPng(canvasRef.current, {
-      pixelRatio: 2
-    });
+    try {
+      setIsExporting(true);
 
-    const link = document.createElement("a");
-    link.download = "branded-template.png";
-    link.href = dataUrl;
-    link.click();
+      // 1080x1080 già in CSS.
+      // pixelRatio 1 = 1080px effettivi; 2 = 2160px (più nitido).
+      const dataUrl = await toPng(canvasRef.current, {
+        pixelRatio: 1
+      });
+
+      downloadDataUrl(
+        dataUrl,
+        `template01_${paletteKey}.png`
+      );
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -116,9 +132,7 @@ export default function Home() {
 
         {/* Palette */}
         <div style={{ marginTop: 16 }}>
-          <label style={{ fontSize: 12, fontWeight: 600 }}>
-            Palette colore
-          </label>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>Palette colore</label>
           <select
             value={paletteKey}
             onChange={(e) => setPaletteKey(e.target.value)}
@@ -141,24 +155,29 @@ export default function Home() {
         {/* Export */}
         <button
           onClick={exportPng}
+          disabled={isExporting}
           style={{
             marginTop: 24,
             width: "100%",
             padding: "10px 14px",
             borderRadius: 8,
             border: "none",
-            background: "#111827",
+            background: isExporting ? "#6b7280" : "#111827",
             color: "white",
             fontWeight: 600,
-            cursor: "pointer"
+            cursor: isExporting ? "not-allowed" : "pointer"
           }}
         >
-          Esporta PNG
+          {isExporting ? "Esportazione..." : "Esporta PNG (1080×1080)"}
         </button>
+
+        <div style={{ marginTop: 12, fontSize: 12, color: "#6b7280" }}>
+          Nota: l’export è client-side (browser).
+        </div>
       </section>
 
-      {/* Canvas */}
-      <section>
+      {/* Canvas 1080×1080 */}
+      <section style={{ overflow: "auto" }}>
         <div
           ref={canvasRef}
           style={{
@@ -167,19 +186,42 @@ export default function Home() {
             background: palette.background,
             borderRadius: 24,
             padding: 80,
-            color: palette.headline,
             display: "flex",
             flexDirection: "column",
-            justifyContent: "space-between"
+            justifyContent: "space-between",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.25)"
           }}
         >
-          <div style={{ fontSize: 28, color: palette.meta }}>
-            TEMPLATE 01
-          </div>
+          <div style={{ fontSize: 28, color: palette.meta }}>TEMPLATE 01</div>
 
           <div>
             <div
               style={{
                 fontSize: 88,
-                lineHe
+                lineHeight: 1.05,
+                fontWeight: 700,
+                color: palette.headline,
+                wordBreak: "break-word"
+              }}
+            >
+              {headline}
+            </div>
 
+            <div
+              style={{
+                marginTop: 32,
+                fontSize: 36,
+                color: palette.subheadline,
+                wordBreak: "break-word"
+              }}
+            >
+              {subheadline}
+            </div>
+          </div>
+
+          <div style={{ fontSize: 28, color: palette.meta }}>iamstudio.to</div>
+        </div>
+      </section>
+    </main>
+  );
+}
