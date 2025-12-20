@@ -30,42 +30,30 @@ const PALETTES = {
   }
 };
 
-/**
- * Catalogo formati (multi-social + META Ads).
- * Nota: per lo STEP 7.1 li mettiamo come "destinazioni" selezionabili.
- * Poi, negli step successivi, aggiungeremo safe-area per alcuni (es. 9:16).
- */
 const FORMATS = [
-  // Instagram
   { key: "ig_post_1_1", group: "Instagram", name: "Instagram Post (1:1)", width: 1080, height: 1080 },
   { key: "ig_post_4_5", group: "Instagram", name: "Instagram Post (4:5)", width: 1080, height: 1350 },
   { key: "ig_story_9_16", group: "Instagram", name: "Instagram Stories / Reels (9:16)", width: 1080, height: 1920 },
 
-  // Facebook
   { key: "fb_post_1_1", group: "Facebook", name: "Facebook Post (1:1)", width: 1080, height: 1080 },
   { key: "fb_link_1_91_1", group: "Facebook", name: "Facebook Link (1.91:1)", width: 1200, height: 628 },
   { key: "fb_cover_page", group: "Facebook", name: "Facebook Page Cover", width: 820, height: 312 },
   { key: "fb_story_9_16", group: "Facebook", name: "Facebook Stories / Reels (9:16)", width: 1080, height: 1920 },
 
-  // YouTube
   { key: "yt_thumb_16_9", group: "YouTube", name: "YouTube Thumbnail (16:9)", width: 1280, height: 720 },
   { key: "yt_shorts_9_16", group: "YouTube", name: "YouTube Shorts (9:16)", width: 1080, height: 1920 },
   { key: "yt_channel_banner", group: "YouTube", name: "YouTube Channel Banner", width: 2560, height: 1440 },
 
-  // LinkedIn
   { key: "li_post_1_1", group: "LinkedIn", name: "LinkedIn Post (1:1)", width: 1080, height: 1080 },
   { key: "li_link_1_91_1", group: "LinkedIn", name: "LinkedIn Link (1.91:1)", width: 1200, height: 627 },
   { key: "li_profile_banner", group: "LinkedIn", name: "LinkedIn Profile Banner", width: 1128, height: 191 },
   { key: "li_company_banner", group: "LinkedIn", name: "LinkedIn Company Banner", width: 1584, height: 396 },
 
-  // TikTok
   { key: "tt_video_9_16", group: "TikTok", name: "TikTok Video (9:16)", width: 1080, height: 1920 },
 
-  // X (Twitter)
   { key: "x_post_16_9", group: "X (Twitter)", name: "X Post (16:9)", width: 1200, height: 675 },
   { key: "x_video_16_9", group: "X (Twitter)", name: "X Video (16:9)", width: 1600, height: 900 },
 
-  // META ADS (Facebook + Instagram placements)
   { key: "meta_feed_1_1", group: "META Ads", name: "META Feed Ad (1:1)", width: 1080, height: 1080 },
   { key: "meta_feed_4_5", group: "META Ads", name: "META Feed Ad (4:5)", width: 1080, height: 1350 },
   { key: "meta_stories_9_16", group: "META Ads", name: "META Stories / Reels Ad (9:16)", width: 1080, height: 1920 },
@@ -85,20 +73,52 @@ function downloadDataUrl(dataUrl, filename) {
   link.click();
 }
 
-function ratioLabel(w, h) {
-  // label semplice per UI (non riduce frazione matematica: basta leggere)
-  return `${w}:${h}`;
+function isNineSixteen(width, height) {
+  return width === 1080 && height === 1920;
 }
 
-function TemplateCanvas({ width, height, palette, headline, subheadline }) {
-  // Regole semplici di scaling tipografico in base al lato corto
+/**
+ * Safe area 9:16 (valori in px su 1080x1920).
+ * Questi sono valori "protettivi" per evitare UI overlay (username/top, CTA/bottom).
+ * Li affiniamo nello step successivo se vuoi.
+ */
+function safeAreaForFormat(width, height) {
+  if (isNineSixteen(width, height)) {
+    return { top: 250, right: 60, bottom: 330, left: 60 };
+  }
+  return { top: 0, right: 0, bottom: 0, left: 0 };
+}
+
+function TemplateCanvas({
+  width,
+  height,
+  palette,
+  headline,
+  subheadline,
+  showSafeAreaOverlay
+}) {
   const shortSide = Math.min(width, height);
-  const pad = Math.round(shortSide * 0.074); // ~80px su 1080
+  const basePad = Math.round(shortSide * 0.074); // ~80px su 1080
   const metaSize = Math.round(shortSide * 0.026); // ~28px su 1080
   const headlineSize = Math.round(shortSide * 0.081); // ~88px su 1080
   const subheadlineSize = Math.round(shortSide * 0.033); // ~36px su 1080
   const gap = Math.round(shortSide * 0.03); // ~32px su 1080
   const radius = Math.round(shortSide * 0.022); // ~24px su 1080
+
+  const safe = safeAreaForFormat(width, height);
+
+  // Padding effettivo = padding base + safe area (protegge sempre il contenuto)
+  const padTop = basePad + safe.top;
+  const padRight = basePad + safe.right;
+  const padBottom = basePad + safe.bottom;
+  const padLeft = basePad + safe.left;
+
+  const safeRect = {
+    x: safe.left,
+    y: safe.top,
+    w: width - safe.left - safe.right,
+    h: height - safe.top - safe.bottom
+  };
 
   return (
     <div
@@ -107,13 +127,48 @@ function TemplateCanvas({ width, height, palette, headline, subheadline }) {
         height,
         background: palette.background,
         borderRadius: radius,
-        padding: pad,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        boxSizing: "border-box"
+        boxSizing: "border-box",
+        position: "relative",
+        overflow: "hidden",
+        paddingTop: padTop,
+        paddingRight: padRight,
+        paddingBottom: padBottom,
+        paddingLeft: padLeft
       }}
     >
+      {/* Overlay safe area (solo preview, non modifica export) */}
+      {showSafeAreaOverlay && (safe.top || safe.right || safe.bottom || safe.left) ? (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              left: safeRect.x,
+              top: safeRect.y,
+              width: safeRect.w,
+              height: safeRect.h,
+              border: "3px dashed rgba(255,255,255,0.55)",
+              borderRadius: 16,
+              pointerEvents: "none"
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: safeRect.x + 16,
+              top: safeRect.y + 12,
+              fontSize: 18,
+              color: "rgba(255,255,255,0.7)",
+              pointerEvents: "none"
+            }}
+          >
+            SAFE AREA
+          </div>
+        </>
+      ) : null}
+
       <div style={{ fontSize: metaSize, color: palette.meta }}>TEMPLATE 01</div>
 
       <div>
@@ -152,6 +207,7 @@ export default function Home() {
   const [paletteKey, setPaletteKey] = useState("dark");
   const [formatKey, setFormatKey] = useState("ig_post_1_1");
   const [isExporting, setIsExporting] = useState(false);
+  const [showSafeArea, setShowSafeArea] = useState(false);
 
   const palette = PALETTES[paletteKey];
 
@@ -159,14 +215,12 @@ export default function Home() {
     return FORMATS.find((f) => f.key === formatKey) || FORMATS[0];
   }, [formatKey]);
 
-  // Preview: scala a max 540px sul lato lungo per stare comoda
   const previewMax = 540;
   const previewScale = useMemo(() => {
     const longSide = Math.max(selectedFormat.width, selectedFormat.height);
     return previewMax / longSide;
   }, [selectedFormat.width, selectedFormat.height]);
 
-  // Ref del canvas “reale” (non scalato) da esportare
   const exportRef = useRef(null);
 
   const exportPng = async () => {
@@ -174,11 +228,7 @@ export default function Home() {
 
     try {
       setIsExporting(true);
-
-      const dataUrl = await toPng(exportRef.current, {
-        pixelRatio: 1 // = dimensione esatta del canvas (es. 1080x1920)
-      });
-
+      const dataUrl = await toPng(exportRef.current, { pixelRatio: 1 });
       const filename = `template01_${selectedFormat.key}_${paletteKey}.png`;
       downloadDataUrl(dataUrl, filename);
     } finally {
@@ -186,7 +236,6 @@ export default function Home() {
     }
   };
 
-  // Raggruppa i formati per optgroup
   const groupedFormats = useMemo(() => {
     const map = new Map();
     for (const f of FORMATS) {
@@ -195,6 +244,9 @@ export default function Home() {
     }
     return Array.from(map.entries());
   }, []);
+
+  const safe = safeAreaForFormat(selectedFormat.width, selectedFormat.height);
+  const hasSafe = safe.top || safe.right || safe.bottom || safe.left;
 
   return (
     <main
@@ -207,7 +259,7 @@ export default function Home() {
         alignItems: "start"
       }}
     >
-      {/* Pannello controlli */}
+      {/* Controls */}
       <section
         style={{
           border: "1px solid #e5e7eb",
@@ -217,7 +269,6 @@ export default function Home() {
       >
         <h2 style={{ margin: 0, fontSize: 18 }}>Contenuti</h2>
 
-        {/* Headline */}
         <div style={{ marginTop: 16 }}>
           <label style={{ fontSize: 12, fontWeight: 600 }}>Headline</label>
           <input
@@ -237,7 +288,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Subheadline */}
         <div style={{ marginTop: 12 }}>
           <label style={{ fontSize: 12, fontWeight: 600 }}>Subheadline</label>
           <textarea
@@ -259,7 +309,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Palette */}
         <div style={{ marginTop: 16 }}>
           <label style={{ fontSize: 12, fontWeight: 600 }}>Palette colore</label>
           <select
@@ -281,7 +330,6 @@ export default function Home() {
           </select>
         </div>
 
-        {/* Destinazione / formato */}
         <div style={{ marginTop: 16 }}>
           <label style={{ fontSize: 12, fontWeight: 600 }}>Destinazione</label>
           <select
@@ -305,22 +353,36 @@ export default function Home() {
               </optgroup>
             ))}
           </select>
-          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
-            <div>
-              <strong>Dimensioni:</strong> {selectedFormat.width}×{selectedFormat.height}
-            </div>
-            <div>
-              <strong>Rapporto:</strong> {ratioLabel(selectedFormat.width, selectedFormat.height)}
-            </div>
-          </div>
         </div>
 
-        {/* Export */}
+        {/* Toggle safe area */}
+        <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center" }}>
+          <input
+            id="safearea"
+            type="checkbox"
+            checked={showSafeArea}
+            onChange={(e) => setShowSafeArea(e.target.checked)}
+          />
+          <label htmlFor="safearea" style={{ fontSize: 13 }}>
+            Mostra safe area
+          </label>
+        </div>
+
+        {hasSafe ? (
+          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+            Safe area attiva per questo formato (contenuto protetto).
+          </div>
+        ) : (
+          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+            Safe area non necessaria per questo formato.
+          </div>
+        )}
+
         <button
           onClick={exportPng}
           disabled={isExporting}
           style={{
-            marginTop: 20,
+            marginTop: 18,
             width: "100%",
             padding: "10px 14px",
             borderRadius: 8,
@@ -333,10 +395,6 @@ export default function Home() {
         >
           {isExporting ? "Esportazione..." : "Esporta PNG"}
         </button>
-
-        <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
-          Export sempre alla dimensione reale del formato selezionato.
-        </div>
       </section>
 
       {/* Preview */}
@@ -355,17 +413,12 @@ export default function Home() {
             palette={palette}
             headline={headline}
             subheadline={subheadline}
+            showSafeAreaOverlay={showSafeArea}
           />
         </div>
 
-        {/* Canvas reale “offscreen” per export (NON scalato) */}
-        <div
-          style={{
-            position: "absolute",
-            left: -100000,
-            top: 0
-          }}
-        >
+        {/* Canvas reale offscreen per export */}
+        <div style={{ position: "absolute", left: -100000, top: 0 }}>
           <div ref={exportRef}>
             <TemplateCanvas
               width={selectedFormat.width}
@@ -373,6 +426,7 @@ export default function Home() {
               palette={palette}
               headline={headline}
               subheadline={subheadline}
+              showSafeAreaOverlay={false}
             />
           </div>
         </div>
