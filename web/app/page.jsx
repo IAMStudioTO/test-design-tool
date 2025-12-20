@@ -5,9 +5,36 @@ import { useState } from "react";
 const HEADLINE_MAX = 40;
 const SUBHEADLINE_MAX = 90;
 
+const PALETTES = {
+  dark: {
+    name: "Dark",
+    background: "#0b0f19",
+    headline: "#ffffff",
+    subheadline: "#e5e7eb",
+    meta: "#9ca3af"
+  },
+  blue: {
+    name: "Blue",
+    background: "#0a2540",
+    headline: "#ffffff",
+    subheadline: "#dbeafe",
+    meta: "#93c5fd"
+  },
+  light: {
+    name: "Light",
+    background: "#f9fafb",
+    headline: "#0b0f19",
+    subheadline: "#374151",
+    meta: "#6b7280"
+  }
+};
+
 export default function Home() {
   const [headline, setHeadline] = useState("Ciao");
   const [subheadline, setSubheadline] = useState("Come stai?");
+  const [paletteKey, setPaletteKey] = useState("dark");
+
+  const palette = PALETTES[paletteKey];
 
   return (
     <main
@@ -72,13 +99,33 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Palette selector */}
+        <div style={{ marginTop: 16 }}>
+          <label style={{ fontSize: 12, fontWeight: 600 }}>
+            Palette colore
+          </label>
+          <select
+            value={paletteKey}
+            onChange={(e) => setPaletteKey(e.target.value)}
+            style={{
+              width: "100%",
+              marginTop: 4,
+              padding: 8,
+              borderRadius: 6,
+              border: "1px solid #d1d5db"
+            }}
+          >
+            {Object.entries(PALETTES).map(([key, p]) => (
+              <option key={key} value={key}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div style={{ marginTop: 16, fontSize: 14 }}>
-          <div>
-            <strong>Formato:</strong> 1080×1080
-          </div>
-          <div>
-            <strong>Template:</strong> 01 (static)
-          </div>
+          <div><strong>Formato:</strong> 1080×1080</div>
+          <div><strong>Template:</strong> 01 (static)</div>
         </div>
       </section>
 
@@ -88,17 +135,19 @@ export default function Home() {
           style={{
             width: 540,
             aspectRatio: "1 / 1",
-            background: "#0b0f19",
+            background: palette.background,
             borderRadius: 24,
             padding: 40,
-            color: "white",
+            color: palette.headline,
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
             boxShadow: "0 20px 60px rgba(0,0,0,0.25)"
           }}
         >
-          <div style={{ fontSize: 14, opacity: 0.8 }}>TEMPLATE 01</div>
+          <div style={{ fontSize: 14, color: palette.meta }}>
+            TEMPLATE 01
+          </div>
 
           <div>
             <div
@@ -106,6 +155,7 @@ export default function Home() {
                 fontSize: 44,
                 lineHeight: 1.05,
                 fontWeight: 700,
+                color: palette.headline,
                 wordBreak: "break-word"
               }}
             >
@@ -116,7 +166,7 @@ export default function Home() {
               style={{
                 marginTop: 16,
                 fontSize: 18,
-                opacity: 0.9,
+                color: palette.subheadline,
                 wordBreak: "break-word"
               }}
             >
@@ -124,7 +174,9 @@ export default function Home() {
             </div>
           </div>
 
-          <div style={{ fontSize: 14, opacity: 0.8 }}>iamstudio.to</div>
+          <div style={{ fontSize: 14, color: palette.meta }}>
+            iamstudio.to
+          </div>
         </div>
       </section>
     </main>
