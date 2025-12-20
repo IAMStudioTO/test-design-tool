@@ -13,7 +13,6 @@ app.use(express.json({ limit: "2mb" }));
 
 const PORT = process.env.PORT || 3000;
 
-// Palette coerenti col frontend
 const PALETTES = {
   dark: {
     background: "#0b0f19",
@@ -47,18 +46,16 @@ app.post("/render/mp4", async (req, res) => {
     width = 1080,
     height = 1080,
     fps = 30,
-    durationInFrames = 120 // 4s @ 30fps
+    durationInFrames = 120
   } = req.body || {};
 
   const palette = PALETTES[paletteKey] || PALETTES.dark;
 
-  // Cartella temporanea per progetto + output
   const workdir = await fs.mkdtemp(path.join(os.tmpdir(), "bct-render-"));
   const entry = path.join(workdir, "entry.jsx");
   const rootFile = path.join(workdir, "remotionRoot.jsx");
   const out = path.join(workdir, "out.mp4");
 
-  // 1) File con le Composition (RemotionRoot)
   const rootCode = `
 import React from "react";
 import {Composition, AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig} from "remotion";
@@ -137,10 +134,11 @@ export const RemotionRoot = () => {
 };
 `;
 
-  // 2) Entry Remotion con registerRoot (quello che Remotion richiede)
+  // Entry con registerRoot (in chiaro, per il validator)
   const entryCode = `
-import {registerRoot} from "remotion";
-import {RemotionRoot} from "./remotionRoot.jsx";
+import { registerRoot } from "remotion";
+import { RemotionRoot } from "./remotionRoot.jsx";
+
 registerRoot(RemotionRoot);
 `;
 
@@ -151,7 +149,9 @@ registerRoot(RemotionRoot);
     const bundleLocation = await bundle({
       entryPoint: entry,
       outDir: path.join(workdir, "bundle"),
-      enableCaching: true
+      enableCaching: true,
+      // ✅ Fix: evita blocco del validator in ambiente server-side dinamico
+      ignoreRegisterRootWarning: true
     });
 
     await renderMedia({
@@ -186,3 +186,4 @@ registerRoot(RemotionRoot);
 app.listen(PORT, () => {
   console.log(`Render service listening on :${PORT}`);
 });
+
