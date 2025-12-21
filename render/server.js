@@ -18,7 +18,7 @@ app.use((req, _res, next) => {
 
 const PORT = Number(process.env.PORT);
 if (!PORT) {
-  console.error("Missing process.env.PORT (Render provides this).");
+  console.error("Missing process.env.PORT");
   process.exit(1);
 }
 
@@ -33,14 +33,13 @@ const PALETTES = {
   light: { background: "#f9fafb", headline: "#0b0f19", subheadline: "#374151" }
 };
 
-app.get("/", (_req, res) => res.status(200).send("Branded Creative Tool Render Service ✅"));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-/**
- * ✅ 1) PRE-BUNDLE una volta sola (o al primo bisogno)
- * ✅ 2) Servi il bundle su QUESTA stessa porta (10000) -> nessuna porta extra (niente 3000)
- */
-const BUNDLE_DIR = path.join(process.cwd(), ".remotion-bundle-static");
+/* =======================
+   REMOTION BUNDLE (ROOT)
+======================= */
+
+const BUNDLE_DIR = path.join(process.cwd(), ".remotion-bundle");
 const ENTRY = path.join(process.cwd(), "remotion", "entry.jsx");
 
 let bundleReady = false;
@@ -51,19 +50,13 @@ async function ensureBundle() {
   if (bundlingPromise) return bundlingPromise;
 
   bundlingPromise = (async () => {
-    console.log("[BUNDLE] bundling once…");
-    // pulizia best-effort
-    try {
-      await fs.rm(BUNDLE_DIR, { recursive: true, force: true });
-    } catch {}
-
+    console.log("[BUNDLE] bundling…");
+    await fs.rm(BUNDLE_DIR, { recursive: true, force: true });
     await bundle({
       entryPoint: ENTRY,
       outDir: BUNDLE_DIR,
-      enableCaching: true,
-      // publicPath non serve qui: lo serviamo da Express
+      enableCaching: true
     });
-
     bundleReady = true;
     console.log("[BUNDLE] ready ✅");
   })();
@@ -71,12 +64,16 @@ async function ensureBundle() {
   return bundlingPromise;
 }
 
-// serve bundle: GET /remotion/index.html ecc.
-app.use("/remotion", express.static(BUNDLE_DIR));
-
 /**
- * JOBS in memoria (MVP)
+ * 🔑 SERVIAMO IL BUNDLE ALLA ROOT
+ * index.html, bundle.js, ecc.
  */
+app.use(express.static(BUNDLE_DIR));
+
+/* =======================
+   JOB SYSTEM
+======================= */
+
 const jobs = new Map();
 let queue = Promise.resolve();
 
@@ -90,14 +87,13 @@ function updateJob(jobId, patch) {
   jobs.set(jobId, { ...job, ...patch, updatedAt: Date.now() });
 }
 
-async function renderMp4ToFile({ jobId, headline, subheadline, paletteKey }) {
+async function renderMp4({ jobId, headline, subheadline, paletteKey }) {
   const palette = PALETTES[paletteKey] || PALETTES.dark;
 
   updateJob(jobId, { phase: "bundling" });
   await ensureBundle();
 
-  // ✅ IMPORTANTISSIMO: usa la porta del servizio (PORT) -> NO porta 3000
-  const serveUrl = `http://127.0.0.1:${PORT}/remotion`;
+  const serveUrl = `http://127.0.0.1:${PORT}`;
 
   updateJob(jobId, { phase: "compositions" });
   const composition = await selectComposition({
@@ -126,49 +122,42 @@ async function renderMp4ToFile({ jobId, headline, subheadline, paletteKey }) {
         "--disable-gpu"
       ]
     },
-    timeoutInMilliseconds: 180000 // 3 minuti
+    timeoutInMilliseconds: 180000
   });
 
   return out;
 }
 
+/* =======================
+   API
+======================= */
+
 app.post("/render/mp4/start", async (req, res) => {
-  const {
-    headline = "Branded Creative Tool",
-    subheadline = "MP4 OK 🚀",
-    paletteKey = "dark"
-  } = req.body || {};
+  const { headline, subheadline, paletteKey = "dark" } = req.body;
 
   const jobId = newJobId();
 
   jobs.set(jobId, {
     id: jobId,
-    status: "queued", // queued | running | done | error
-    phase: "queued",  // queued | bundling | compositions | rendering | done | error
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    filename: `template01_${paletteKey}.mp4`,
-    outPath: null,
-    error: null
+    status: "queued",
+    phase: "queued",
+    filename: `template01_${paletteKey}.mp4`
   });
 
   queue = queue.then(async () => {
-    const job = jobs.get(jobId);
-    if (!job) return;
-
-    updateJob(jobId, { status: "running", phase: "queued" });
-
+    updateJob(jobId, { status: "running" });
     try {
-      const outPath = await renderMp4ToFile({ jobId, headline, subheadline, paletteKey });
-      updateJob(jobId, { status: "done", phase: "done", outPath });
-      console.log("[MP4] JOB DONE", jobId);
-    } catch (err) {
-      updateJob(jobId, {
-        status: "error",
-        phase: "error",
-        error: err?.message || "Unknown error"
+      const outPath = await renderMp4({
+        jobId,
+        headline,
+        subheadline,
+        paletteKey
       });
-      console.error("[MP4] JOB ERROR", jobId, err?.message || err);
+      updateJob(jobId, { status: "done", phase: "done", outPath });
+      console.log("[MP4] DONE", jobId);
+    } catch (err) {
+      updateJob(jobId, { status: "error", phase: "error", error: err.message });
+      console.error("[MP4] ERROR", err);
     }
   });
 
@@ -177,34 +166,23 @@ app.post("/render/mp4/start", async (req, res) => {
 
 app.get("/render/mp4/status/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
-  if (!job) return res.status(404).json({ ok: false, error: "Job not found" });
-
-  res.json({
-    ok: true,
-    job: {
-      id: job.id,
-      status: job.status,
-      phase: job.phase,
-      filename: job.filename,
-      error: job.error
-    }
-  });
+  if (!job) return res.status(404).json({ ok: false });
+  res.json({ ok: true, job });
 });
 
 app.get("/render/mp4/download/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
-  if (!job) return res.status(404).json({ ok: false, error: "Job not found" });
-  if (job.status !== "done" || !job.outPath) {
-    return res.status(409).json({ ok: false, error: "Job not ready" });
-  }
+  if (!job || job.status !== "done")
+    return res.status(409).json({ ok: false });
 
   res.setHeader("Content-Type", "video/mp4");
   res.setHeader("Content-Disposition", `attachment; filename="${job.filename}"`);
-  res.setHeader("Cache-Control", "no-store");
-  res.setHeader("X-Accel-Buffering", "no");
-
   createReadStream(job.outPath).pipe(res);
 });
+
+/* =======================
+   START
+======================= */
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Render service listening on :${PORT}`);
