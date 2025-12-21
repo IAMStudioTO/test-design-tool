@@ -1,0 +1,27 @@
+{
+  "void": {
+    "inFrames": 20,
+    "stagger": 10,
+    "y": 12,
+    "scaleFrom": 1,
+    "opacityFrom": 0,
+    "easing": "cubic"
+  },
+  "pulse": {
+    "inFrames": 14,
+    "stagger": 6,
+    "y": 24,
+    "scaleFrom": 1.06,
+    "opacityFrom": 0,
+    "easing": "back"
+  },
+  "glitch-lite": {
+    "inFrames": 10,
+    "stagger": 4,
+    "y": 6,
+    "scaleFrom": 1,
+    "opacityFrom": 0,
+    "easing": "linear",
+    "glitch": true
+  }
+}
