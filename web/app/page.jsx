@@ -73,15 +73,21 @@ function downloadDataUrl(dataUrl, filename) {
   link.click();
 }
 
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function isNineSixteen(width, height) {
   return width === 1080 && height === 1920;
 }
 
-/**
- * Safe area 9:16 (valori in px su 1080x1920).
- * Questi sono valori "protettivi" per evitare UI overlay (username/top, CTA/bottom).
- * Li affiniamo nello step successivo se vuoi.
- */
 function safeAreaForFormat(width, height) {
   if (isNineSixteen(width, height)) {
     return { top: 250, right: 60, bottom: 330, left: 60 };
@@ -89,25 +95,17 @@ function safeAreaForFormat(width, height) {
   return { top: 0, right: 0, bottom: 0, left: 0 };
 }
 
-function TemplateCanvas({
-  width,
-  height,
-  palette,
-  headline,
-  subheadline,
-  showSafeAreaOverlay
-}) {
+function TemplateCanvas({ width, height, palette, headline, subheadline, showSafeAreaOverlay }) {
   const shortSide = Math.min(width, height);
-  const basePad = Math.round(shortSide * 0.074); // ~80px su 1080
-  const metaSize = Math.round(shortSide * 0.026); // ~28px su 1080
-  const headlineSize = Math.round(shortSide * 0.081); // ~88px su 1080
-  const subheadlineSize = Math.round(shortSide * 0.033); // ~36px su 1080
-  const gap = Math.round(shortSide * 0.03); // ~32px su 1080
-  const radius = Math.round(shortSide * 0.022); // ~24px su 1080
+  const basePad = Math.round(shortSide * 0.074);
+  const metaSize = Math.round(shortSide * 0.026);
+  const headlineSize = Math.round(shortSide * 0.081);
+  const subheadlineSize = Math.round(shortSide * 0.033);
+  const gap = Math.round(shortSide * 0.03);
+  const radius = Math.round(shortSide * 0.022);
 
   const safe = safeAreaForFormat(width, height);
 
-  // Padding effettivo = padding base + safe area (protegge sempre il contenuto)
   const padTop = basePad + safe.top;
   const padRight = basePad + safe.right;
   const padBottom = basePad + safe.bottom;
@@ -139,7 +137,6 @@ function TemplateCanvas({
         paddingLeft: padLeft
       }}
     >
-      {/* Overlay safe area (solo preview, non modifica export) */}
       {showSafeAreaOverlay && (safe.top || safe.right || safe.bottom || safe.left) ? (
         <>
           <div
@@ -207,6 +204,11 @@ export default function Home() {
   const [paletteKey, setPaletteKey] = useState("dark");
   const [formatKey, setFormatKey] = useState("ig_post_1_1");
   const [isExporting, setIsExporting] = useState(false);
+
+  // ✅ NUOVO: stato export mp4 + errore user-friendly
+  const [isExportingMp4, setIsExportingMp4] = useState(false);
+  const [mp4Error, setMp4Error] = useState("");
+
   const [showSafeArea, setShowSafeArea] = useState(false);
 
   const palette = PALETTES[paletteKey];
@@ -236,6 +238,46 @@ export default function Home() {
     }
   };
 
+  // ✅ NUOVO: export MP4 chiamando il backend
+  const exportMp4 = async () => {
+    try {
+      setMp4Error("");
+      setIsExportingMp4(true);
+
+      // Base URL del backend (in cloud lo metteremo su Vercel env var)
+      const baseUrl =
+        process.env.NEXT_PUBLIC_RENDER_URL || "http://localhost:3000";
+
+      const res = await fetch(`${baseUrl}/render/mp4`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          headline,
+          subheadline,
+          paletteKey
+        })
+      });
+
+      if (!res.ok) {
+        // prova a leggere json errore
+        let msg = `Errore export MP4 (${res.status})`;
+        try {
+          const data = await res.json();
+          if (data?.error) msg = data.error;
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const blob = await res.blob();
+      const filename = `template01_${paletteKey}.mp4`;
+      downloadBlob(blob, filename);
+    } catch (e) {
+      setMp4Error(e?.message || "Errore sconosciuto durante export MP4");
+    } finally {
+      setIsExportingMp4(false);
+    }
+  };
+
   const groupedFormats = useMemo(() => {
     const map = new Map();
     for (const f of FORMATS) {
@@ -259,7 +301,6 @@ export default function Home() {
         alignItems: "start"
       }}
     >
-      {/* Controls */}
       <section
         style={{
           border: "1px solid #e5e7eb",
@@ -355,7 +396,6 @@ export default function Home() {
           </select>
         </div>
 
-        {/* Toggle safe area */}
         <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center" }}>
           <input
             id="safearea"
@@ -378,9 +418,10 @@ export default function Home() {
           </div>
         )}
 
+        {/* PNG */}
         <button
           onClick={exportPng}
-          disabled={isExporting}
+          disabled={isExporting || isExportingMp4}
           style={{
             marginTop: 18,
             width: "100%",
@@ -395,9 +436,33 @@ export default function Home() {
         >
           {isExporting ? "Esportazione..." : "Esporta PNG"}
         </button>
+
+        {/* ✅ MP4 */}
+        <button
+          onClick={exportMp4}
+          disabled={isExportingMp4 || isExporting}
+          style={{
+            marginTop: 10,
+            width: "100%",
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "1px solid #111827",
+            background: "white",
+            color: "#111827",
+            fontWeight: 600,
+            cursor: isExportingMp4 ? "not-allowed" : "pointer"
+          }}
+        >
+          {isExportingMp4 ? "Render in corso..." : "Esporta MP4"}
+        </button>
+
+        {mp4Error ? (
+          <div style={{ marginTop: 10, fontSize: 12, color: "#b91c1c" }}>
+            {mp4Error}
+          </div>
+        ) : null}
       </section>
 
-      {/* Preview */}
       <section style={{ overflow: "auto" }}>
         <div
           style={{
@@ -417,7 +482,6 @@ export default function Home() {
           />
         </div>
 
-        {/* Canvas reale offscreen per export */}
         <div style={{ position: "absolute", left: -100000, top: 0 }}>
           <div ref={exportRef}>
             <TemplateCanvas
