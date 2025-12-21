@@ -7,7 +7,7 @@
     "node": "20.x"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node --max-old-space-size=2048 server.js"
   },
   "dependencies": {
     "@remotion/bundler": "^4.0.0",
