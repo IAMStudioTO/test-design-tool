@@ -22,8 +22,11 @@ if (!PORT) {
   process.exit(1);
 }
 
-// ✅ Cache del browser Remotion in /tmp (aiuta finché l’istanza resta “calda”)
-process.env.REMOTION_BROWSER_CACHE_DIRECTORY = path.join(os.tmpdir(), "remotion-browser-cache");
+// cache browser in /tmp (aiuta finché l’istanza resta calda)
+process.env.REMOTION_BROWSER_CACHE_DIRECTORY = path.join(
+  os.tmpdir(),
+  "remotion-browser-cache"
+);
 
 const PALETTES = {
   dark: { background: "#0b0f19", headline: "#ffffff", subheadline: "#e5e7eb" },
@@ -34,46 +37,50 @@ const PALETTES = {
 app.get("/", (_req, res) => res.status(200).send("Branded Creative Tool Render Service ✅"));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-/**
- * JOBS in memoria (ok per MVP).
- * Se il servizio viene riavviato, i job spariscono (accettabile per ora).
- */
 const jobs = new Map();
-/**
- * Coda semplice per evitare render concorrenti (WEB_CONCURRENCY=1)
- */
 let queue = Promise.resolve();
 
 function newJobId() {
   return `job_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-async function renderMp4ToFile({ headline, subheadline, paletteKey }) {
+function updateJob(jobId, patch) {
+  const job = jobs.get(jobId);
+  if (!job) return;
+  jobs.set(jobId, { ...job, ...patch, updatedAt: Date.now() });
+}
+
+async function renderMp4ToFile({ jobId, headline, subheadline, paletteKey }) {
   const palette = PALETTES[paletteKey] || PALETTES.dark;
 
   const entryPoint = path.join(process.cwd(), "remotion", "entry.jsx");
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "bct-video-"));
   const out = path.join(outDir, `out_${Date.now()}.mp4`);
 
+  updateJob(jobId, { phase: "bundling" });
   console.log("[MP4] bundling…");
+
   const bundleLocation = await bundle({
     entryPoint,
     outDir: path.join(process.cwd(), ".remotion-bundle"),
     enableCaching: true
   });
 
+  updateJob(jobId, { phase: "compositions" });
   console.log("[MP4] reading compositions…");
-  const compositions = await getCompositions(bundleLocation);
+
+  const compositions = await getCompositions(bundleLocation, {
+    onBrowserDownload: ({ percent }) => {
+      const p = Math.round((percent ?? 0) * 100);
+      updateJob(jobId, { phase: "browser", browserPercent: p });
+    }
+  });
 
   const composition = compositions.find((c) => c.id === "Template01");
   if (!composition) throw new Error("Composition Template01 not found");
 
-  console.log("[MP4] rendering MP4…", {
-    width: composition.width,
-    height: composition.height,
-    fps: composition.fps,
-    durationInFrames: composition.durationInFrames
-  });
+  updateJob(jobId, { phase: "rendering" });
+  console.log("[MP4] rendering MP4…");
 
   await renderMedia({
     serveUrl: bundleLocation,
@@ -81,15 +88,25 @@ async function renderMp4ToFile({ headline, subheadline, paletteKey }) {
     codec: "h264",
     outputLocation: out,
     inputProps: { headline, subheadline, palette },
-    chromiumOptions: { args: ["--no-sandbox", "--disable-setuid-sandbox"] }
+
+    // ✅ Argomenti chromium: ok in container
+    chromiumOptions: {
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--no-zygote",
+        "--disable-gpu"
+      ]
+    },
+
+    // ✅ FIX: aumenta tempo max per avvio/connessione a Chrome
+    timeoutInMilliseconds: 180000 // 3 minuti
   });
 
   return out;
 }
 
-/**
- * 1) START JOB: risponde subito con jobId
- */
 app.post("/render/mp4/start", async (req, res) => {
   const {
     headline = "Branded Creative Tool",
@@ -102,6 +119,8 @@ app.post("/render/mp4/start", async (req, res) => {
   jobs.set(jobId, {
     id: jobId,
     status: "queued", // queued | running | done | error
+    phase: "queued",
+    browserPercent: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     filename: `template01_${paletteKey}.mp4`,
@@ -109,42 +128,35 @@ app.post("/render/mp4/start", async (req, res) => {
     error: null
   });
 
-  // metti in coda (1 alla volta)
   queue = queue.then(async () => {
     const job = jobs.get(jobId);
     if (!job) return;
 
-    job.status = "running";
-    job.updatedAt = Date.now();
-    jobs.set(jobId, job);
-
-    const startedAt = Date.now();
+    updateJob(jobId, { status: "running", phase: "queued" });
 
     try {
-      const outPath = await renderMp4ToFile({ headline, subheadline, paletteKey });
+      const outPath = await renderMp4ToFile({
+        jobId,
+        headline,
+        subheadline,
+        paletteKey
+      });
 
-      job.status = "done";
-      job.outPath = outPath;
-      job.updatedAt = Date.now();
-      jobs.set(jobId, job);
-
-      console.log("[MP4] JOB DONE", jobId, "in", Date.now() - startedAt, "ms");
+      updateJob(jobId, { status: "done", phase: "done", outPath });
+      console.log("[MP4] JOB DONE", jobId);
     } catch (err) {
-      job.status = "error";
-      job.error = err?.message || "Unknown error";
-      job.updatedAt = Date.now();
-      jobs.set(jobId, job);
-
-      console.error("[MP4] JOB ERROR", jobId, job.error);
+      updateJob(jobId, {
+        status: "error",
+        phase: "error",
+        error: err?.message || "Unknown error"
+      });
+      console.error("[MP4] JOB ERROR", jobId, err?.message || err);
     }
   });
 
   res.json({ ok: true, jobId });
 });
 
-/**
- * 2) STATUS JOB
- */
 app.get("/render/mp4/status/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ ok: false, error: "Job not found" });
@@ -154,15 +166,14 @@ app.get("/render/mp4/status/:jobId", (req, res) => {
     job: {
       id: job.id,
       status: job.status,
+      phase: job.phase,
+      browserPercent: job.browserPercent,
       filename: job.filename,
       error: job.error
     }
   });
 });
 
-/**
- * 3) DOWNLOAD
- */
 app.get("/render/mp4/download/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ ok: false, error: "Job not found" });
