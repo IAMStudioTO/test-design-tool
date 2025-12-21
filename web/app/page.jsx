@@ -6,13 +6,14 @@ import { toPng } from "html-to-image";
 // ✅ BRAND (single-tenant)
 import brandConfig from "../../Brand/brand.config.json";
 import brandColors from "../../Brand/colors.json";
+import brandFonts from "../../Brand/fonts.json";
 
 const HEADLINE_MAX = 40;
 const SUBHEADLINE_MAX = 90;
 
 const FORMATS = [
-  { key: "ig_post_1_1", group: "Instagram", name: "Instagram Post (1:1)", width: 1080, height: 1080 },
-  { key: "ig_story_9_16", group: "Instagram", name: "Instagram Stories / Reels (9:16)", width: 1080, height: 1920 }
+  { key: "ig_post_1_1", name: "Instagram Post (1:1)", width: 1080, height: 1080 },
+  { key: "ig_story_9_16", name: "Instagram Stories / Reels (9:16)", width: 1080, height: 1920 }
 ];
 
 function downloadDataUrl(dataUrl, filename) {
@@ -33,7 +34,13 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function TemplateCanvas({ width, height, palette, headline, subheadline }) {
+function cssFontFamily(family) {
+  // Supporta font con spazi e fallback
+  if (!family) return "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+  return `${family}, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
+}
+
+function TemplateCanvas({ width, height, palette, headline, subheadline, fonts }) {
   const shortSide = Math.min(width, height);
   const basePad = Math.round(shortSide * 0.074);
   const metaSize = Math.round(shortSide * 0.026);
@@ -64,9 +71,11 @@ function TemplateCanvas({ width, height, palette, headline, subheadline }) {
       <div>
         <div
           style={{
+            fontFamily: cssFontFamily(fonts?.headline?.family),
             fontSize: headlineSize,
             lineHeight: 1.05,
-            fontWeight: 700,
+            fontWeight: fonts?.headline?.weight ?? 700,
+            letterSpacing: (fonts?.headline?.letterSpacing ?? 0) + "px",
             color: palette.headline,
             wordBreak: "break-word"
           }}
@@ -77,7 +86,10 @@ function TemplateCanvas({ width, height, palette, headline, subheadline }) {
         <div
           style={{
             marginTop: gap,
+            fontFamily: cssFontFamily(fonts?.subheadline?.family),
             fontSize: subheadlineSize,
+            fontWeight: fonts?.subheadline?.weight ?? 400,
+            letterSpacing: (fonts?.subheadline?.letterSpacing ?? 0) + "px",
             color: palette.subheadline,
             wordBreak: "break-word"
           }}
@@ -145,7 +157,6 @@ export default function Home() {
 
       const baseUrl = process.env.NEXT_PUBLIC_RENDER_URL || "http://localhost:3000";
 
-      // start
       setMp4Status("Avvio render…");
       const startRes = await fetch(`${baseUrl}/render/mp4/start`, {
         method: "POST",
@@ -158,7 +169,6 @@ export default function Home() {
       const { jobId } = await startRes.json();
       if (!jobId) throw new Error("Job ID mancante");
 
-      // poll
       for (let i = 0; i < 120; i++) {
         const stRes = await fetch(`${baseUrl}/render/mp4/status/${jobId}`);
         const st = await stRes.json();
@@ -184,9 +194,7 @@ export default function Home() {
           return;
         }
 
-        if (status === "error") {
-          throw new Error(st?.job?.error || "Errore rendering");
-        }
+        if (status === "error") throw new Error(st?.job?.error || "Errore rendering");
 
         await sleep(2000);
       }
@@ -309,6 +317,7 @@ export default function Home() {
             width={selectedFormat.width}
             height={selectedFormat.height}
             palette={palette}
+            fonts={brandFonts}
             headline={headline}
             subheadline={subheadline}
           />
@@ -320,6 +329,7 @@ export default function Home() {
               width={selectedFormat.width}
               height={selectedFormat.height}
               palette={palette}
+              fonts={brandFonts}
               headline={headline}
               subheadline={subheadline}
             />
