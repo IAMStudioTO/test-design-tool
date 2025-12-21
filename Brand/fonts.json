@@ -1,0 +1,12 @@
+{
+  "headline": {
+    "family": "Space Grotesk",
+    "weight": 600,
+    "letterSpacing": -0.5
+  },
+  "subheadline": {
+    "family": "JetBrains Mono",
+    "weight": 400,
+    "letterSpacing": 0
+  }
+}
