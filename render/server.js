@@ -22,7 +22,6 @@ if (!PORT) {
   process.exit(1);
 }
 
-// cache browser in /tmp (aiuta finché l’istanza resta calda)
 process.env.REMOTION_BROWSER_CACHE_DIRECTORY = path.join(
   os.tmpdir(),
   "remotion-browser-cache"
@@ -69,12 +68,8 @@ async function renderMp4ToFile({ jobId, headline, subheadline, paletteKey }) {
   updateJob(jobId, { phase: "compositions" });
   console.log("[MP4] reading compositions…");
 
-  const compositions = await getCompositions(bundleLocation, {
-    onBrowserDownload: ({ percent }) => {
-      const p = Math.round((percent ?? 0) * 100);
-      updateJob(jobId, { phase: "browser", browserPercent: p });
-    }
-  });
+  // ✅ IMPORTANTE: niente onBrowserDownload (evita crash)
+  const compositions = await getCompositions(bundleLocation);
 
   const composition = compositions.find((c) => c.id === "Template01");
   if (!composition) throw new Error("Composition Template01 not found");
@@ -88,8 +83,6 @@ async function renderMp4ToFile({ jobId, headline, subheadline, paletteKey }) {
     codec: "h264",
     outputLocation: out,
     inputProps: { headline, subheadline, palette },
-
-    // ✅ Argomenti chromium: ok in container
     chromiumOptions: {
       args: [
         "--no-sandbox",
@@ -99,9 +92,7 @@ async function renderMp4ToFile({ jobId, headline, subheadline, paletteKey }) {
         "--disable-gpu"
       ]
     },
-
-    // ✅ FIX: aumenta tempo max per avvio/connessione a Chrome
-    timeoutInMilliseconds: 180000 // 3 minuti
+    timeoutInMilliseconds: 180000
   });
 
   return out;
@@ -119,8 +110,7 @@ app.post("/render/mp4/start", async (req, res) => {
   jobs.set(jobId, {
     id: jobId,
     status: "queued", // queued | running | done | error
-    phase: "queued",
-    browserPercent: null,
+    phase: "queued",  // queued | bundling | compositions | rendering | done | error
     createdAt: Date.now(),
     updatedAt: Date.now(),
     filename: `template01_${paletteKey}.mp4`,
@@ -135,13 +125,7 @@ app.post("/render/mp4/start", async (req, res) => {
     updateJob(jobId, { status: "running", phase: "queued" });
 
     try {
-      const outPath = await renderMp4ToFile({
-        jobId,
-        headline,
-        subheadline,
-        paletteKey
-      });
-
+      const outPath = await renderMp4ToFile({ jobId, headline, subheadline, paletteKey });
       updateJob(jobId, { status: "done", phase: "done", outPath });
       console.log("[MP4] JOB DONE", jobId);
     } catch (err) {
@@ -167,7 +151,6 @@ app.get("/render/mp4/status/:jobId", (req, res) => {
       id: job.id,
       status: job.status,
       phase: job.phase,
-      browserPercent: job.browserPercent,
       filename: job.filename,
       error: job.error
     }
