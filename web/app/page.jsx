@@ -105,7 +105,6 @@ function TemplateCanvas({ width, height, palette, headline, subheadline, showSaf
   const radius = Math.round(shortSide * 0.022);
 
   const safe = safeAreaForFormat(width, height);
-
   const padTop = basePad + safe.top;
   const padRight = basePad + safe.right;
   const padBottom = basePad + safe.bottom;
@@ -203,10 +202,11 @@ export default function Home() {
   const [subheadline, setSubheadline] = useState("Come stai?");
   const [paletteKey, setPaletteKey] = useState("dark");
   const [formatKey, setFormatKey] = useState("ig_post_1_1");
-  const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPng, setIsExportingPng] = useState(false);
 
-  // ✅ NUOVO: stato export mp4 + errore user-friendly
+  // ✅ MP4 async states
   const [isExportingMp4, setIsExportingMp4] = useState(false);
+  const [mp4Status, setMp4Status] = useState("");
   const [mp4Error, setMp4Error] = useState("");
 
   const [showSafeArea, setShowSafeArea] = useState(false);
@@ -229,50 +229,103 @@ export default function Home() {
     if (!exportRef.current) return;
 
     try {
-      setIsExporting(true);
+      setIsExportingPng(true);
       const dataUrl = await toPng(exportRef.current, { pixelRatio: 1 });
       const filename = `template01_${selectedFormat.key}_${paletteKey}.png`;
       downloadDataUrl(dataUrl, filename);
     } finally {
-      setIsExporting(false);
+      setIsExportingPng(false);
     }
   };
 
-  // ✅ NUOVO: export MP4 chiamando il backend
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   const exportMp4 = async () => {
     try {
       setMp4Error("");
+      setMp4Status("");
       setIsExportingMp4(true);
 
-      // Base URL del backend (in cloud lo metteremo su Vercel env var)
       const baseUrl =
         process.env.NEXT_PUBLIC_RENDER_URL || "http://localhost:3000";
 
-      const res = await fetch(`${baseUrl}/render/mp4`, {
+      // 1) start job
+      setMp4Status("Avvio render…");
+      const startRes = await fetch(`${baseUrl}/render/mp4/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          headline,
-          subheadline,
-          paletteKey
-        })
+        body: JSON.stringify({ headline, subheadline, paletteKey })
       });
 
-      if (!res.ok) {
-        // prova a leggere json errore
-        let msg = `Errore export MP4 (${res.status})`;
+      if (!startRes.ok) {
+        let msg = `Errore start MP4 (${startRes.status})`;
         try {
-          const data = await res.json();
+          const data = await startRes.json();
           if (data?.error) msg = data.error;
         } catch {}
         throw new Error(msg);
       }
 
-      const blob = await res.blob();
-      const filename = `template01_${paletteKey}.mp4`;
-      downloadBlob(blob, filename);
+      const startData = await startRes.json();
+      const jobId = startData?.jobId;
+      if (!jobId) throw new Error("Job ID mancante dal backend");
+
+      // 2) poll status
+      const maxPolls = 120; // ~ 2 minuti (poll ogni 1s)
+      for (let i = 0; i < maxPolls; i++) {
+        setMp4Status(i < 3 ? "Render in coda…" : "Render in corso…");
+
+        const stRes = await fetch(`${baseUrl}/render/mp4/status/${jobId}`, {
+          method: "GET"
+        });
+
+        if (!stRes.ok) {
+          let msg = `Errore status MP4 (${stRes.status})`;
+          try {
+            const data = await stRes.json();
+            if (data?.error) msg = data.error;
+          } catch {}
+          throw new Error(msg);
+        }
+
+        const stData = await stRes.json();
+        const status = stData?.job?.status;
+
+        if (status === "done") {
+          setMp4Status("Download…");
+
+          // 3) download
+          const dlRes = await fetch(`${baseUrl}/render/mp4/download/${jobId}`, {
+            method: "GET"
+          });
+
+          if (!dlRes.ok) {
+            let msg = `Errore download MP4 (${dlRes.status})`;
+            try {
+              const data = await dlRes.json();
+              if (data?.error) msg = data.error;
+            } catch {}
+            throw new Error(msg);
+          }
+
+          const blob = await dlRes.blob();
+          downloadBlob(blob, `template01_${paletteKey}.mp4`);
+          setMp4Status("Fatto ✅");
+          return;
+        }
+
+        if (status === "error") {
+          const errMsg = stData?.job?.error || "Errore rendering MP4";
+          throw new Error(errMsg);
+        }
+
+        await sleep(1000);
+      }
+
+      throw new Error("Timeout: render troppo lento. Riprova tra poco.");
     } catch (e) {
       setMp4Error(e?.message || "Errore sconosciuto durante export MP4");
+      setMp4Status("");
     } finally {
       setIsExportingMp4(false);
     }
@@ -408,39 +461,33 @@ export default function Home() {
           </label>
         </div>
 
-        {hasSafe ? (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
-            Safe area attiva per questo formato (contenuto protetto).
-          </div>
-        ) : (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
-            Safe area non necessaria per questo formato.
-          </div>
-        )}
+        <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+          {hasSafe ? "Safe area attiva per questo formato (contenuto protetto)." : "Safe area non necessaria per questo formato."}
+        </div>
 
         {/* PNG */}
         <button
           onClick={exportPng}
-          disabled={isExporting || isExportingMp4}
+          disabled={isExportingPng || isExportingMp4}
           style={{
             marginTop: 18,
             width: "100%",
             padding: "10px 14px",
             borderRadius: 8,
             border: "none",
-            background: isExporting ? "#6b7280" : "#111827",
+            background: isExportingPng ? "#6b7280" : "#111827",
             color: "white",
             fontWeight: 600,
-            cursor: isExporting ? "not-allowed" : "pointer"
+            cursor: isExportingPng ? "not-allowed" : "pointer"
           }}
         >
-          {isExporting ? "Esportazione..." : "Esporta PNG"}
+          {isExportingPng ? "Esportazione..." : "Esporta PNG"}
         </button>
 
-        {/* ✅ MP4 */}
+        {/* MP4 (ASYNC) */}
         <button
           onClick={exportMp4}
-          disabled={isExportingMp4 || isExporting}
+          disabled={isExportingMp4 || isExportingPng}
           style={{
             marginTop: 10,
             width: "100%",
@@ -455,6 +502,12 @@ export default function Home() {
         >
           {isExportingMp4 ? "Render in corso..." : "Esporta MP4"}
         </button>
+
+        {mp4Status ? (
+          <div style={{ marginTop: 10, fontSize: 12, color: "#374151" }}>
+            {mp4Status}
+          </div>
+        ) : null}
 
         {mp4Error ? (
           <div style={{ marginTop: 10, fontSize: 12, color: "#b91c1c" }}>
