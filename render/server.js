@@ -5,7 +5,7 @@ import os from "os";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
 import { bundle } from "@remotion/bundler";
-import { getCompositions, renderMedia } from "@remotion/renderer";
+import { selectComposition, renderMedia } from "@remotion/renderer";
 
 const app = express();
 app.use(cors());
@@ -36,6 +36,47 @@ const PALETTES = {
 app.get("/", (_req, res) => res.status(200).send("Branded Creative Tool Render Service ✅"));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+/**
+ * ✅ 1) PRE-BUNDLE una volta sola (o al primo bisogno)
+ * ✅ 2) Servi il bundle su QUESTA stessa porta (10000) -> nessuna porta extra (niente 3000)
+ */
+const BUNDLE_DIR = path.join(process.cwd(), ".remotion-bundle-static");
+const ENTRY = path.join(process.cwd(), "remotion", "entry.jsx");
+
+let bundleReady = false;
+let bundlingPromise = null;
+
+async function ensureBundle() {
+  if (bundleReady) return;
+  if (bundlingPromise) return bundlingPromise;
+
+  bundlingPromise = (async () => {
+    console.log("[BUNDLE] bundling once…");
+    // pulizia best-effort
+    try {
+      await fs.rm(BUNDLE_DIR, { recursive: true, force: true });
+    } catch {}
+
+    await bundle({
+      entryPoint: ENTRY,
+      outDir: BUNDLE_DIR,
+      enableCaching: true,
+      // publicPath non serve qui: lo serviamo da Express
+    });
+
+    bundleReady = true;
+    console.log("[BUNDLE] ready ✅");
+  })();
+
+  return bundlingPromise;
+}
+
+// serve bundle: GET /remotion/index.html ecc.
+app.use("/remotion", express.static(BUNDLE_DIR));
+
+/**
+ * JOBS in memoria (MVP)
+ */
 const jobs = new Map();
 let queue = Promise.resolve();
 
@@ -52,33 +93,26 @@ function updateJob(jobId, patch) {
 async function renderMp4ToFile({ jobId, headline, subheadline, paletteKey }) {
   const palette = PALETTES[paletteKey] || PALETTES.dark;
 
-  const entryPoint = path.join(process.cwd(), "remotion", "entry.jsx");
+  updateJob(jobId, { phase: "bundling" });
+  await ensureBundle();
+
+  // ✅ IMPORTANTISSIMO: usa la porta del servizio (PORT) -> NO porta 3000
+  const serveUrl = `http://127.0.0.1:${PORT}/remotion`;
+
+  updateJob(jobId, { phase: "compositions" });
+  const composition = await selectComposition({
+    serveUrl,
+    id: "Template01",
+    inputProps: { headline, subheadline, palette }
+  });
+
+  updateJob(jobId, { phase: "rendering" });
+
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "bct-video-"));
   const out = path.join(outDir, `out_${Date.now()}.mp4`);
 
-  updateJob(jobId, { phase: "bundling" });
-  console.log("[MP4] bundling…");
-
-  const bundleLocation = await bundle({
-    entryPoint,
-    outDir: path.join(process.cwd(), ".remotion-bundle"),
-    enableCaching: true
-  });
-
-  updateJob(jobId, { phase: "compositions" });
-  console.log("[MP4] reading compositions…");
-
-  // ✅ IMPORTANTE: niente onBrowserDownload (evita crash)
-  const compositions = await getCompositions(bundleLocation);
-
-  const composition = compositions.find((c) => c.id === "Template01");
-  if (!composition) throw new Error("Composition Template01 not found");
-
-  updateJob(jobId, { phase: "rendering" });
-  console.log("[MP4] rendering MP4…");
-
   await renderMedia({
-    serveUrl: bundleLocation,
+    serveUrl,
     composition,
     codec: "h264",
     outputLocation: out,
@@ -92,7 +126,7 @@ async function renderMp4ToFile({ jobId, headline, subheadline, paletteKey }) {
         "--disable-gpu"
       ]
     },
-    timeoutInMilliseconds: 180000
+    timeoutInMilliseconds: 180000 // 3 minuti
   });
 
   return out;
