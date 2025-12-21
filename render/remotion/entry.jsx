@@ -1,57 +1,171 @@
 import React from "react";
 import { registerRoot } from "remotion";
-import { Composition, AbsoluteFill } from "remotion";
+import {
+  Composition,
+  AbsoluteFill,
+  useCurrentFrame,
+  interpolate,
+  Easing,
+  Img
+} from "remotion";
 
-const Template01 = ({ headline, subheadline, palette }) => {
+/* =======================
+   LOAD BRAND FILES
+======================= */
+
+import brandConfig from "../../Brand/brand.config.json";
+import colors from "../../Brand/colors.json";
+import fonts from "../../Brand/fonts.json";
+import motionPresets from "../../Brand/motion.json";
+import logo from "../../Brand/logo.svg";
+
+/* =======================
+   MOTION HELPERS
+======================= */
+
+const easingMap = {
+  cubic: Easing.out(Easing.cubic),
+  back: Easing.out(Easing.back(1.2)),
+  linear: Easing.linear
+};
+
+function useEnterMotion({ startAt, preset }) {
+  const frame = useCurrentFrame();
+
+  const ease = easingMap[preset.easing] ?? Easing.out(Easing.cubic);
+
+  const opacity = interpolate(
+    frame,
+    [startAt, startAt + preset.inFrames],
+    [preset.opacityFrom ?? 0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease }
+  );
+
+  const translateY = interpolate(
+    frame,
+    [startAt, startAt + preset.inFrames],
+    [preset.y ?? 0, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease }
+  );
+
+  const scale = interpolate(
+    frame,
+    [startAt, startAt + preset.inFrames],
+    [preset.scaleFrom ?? 1, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease }
+  );
+
+  return {
+    opacity,
+    transform: `translateY(${translateY}px) scale(${scale})`
+  };
+}
+
+/* =======================
+   TEMPLATE
+======================= */
+
+const Template01 = ({
+  headline,
+  subheadline,
+  paletteKey,
+  motionStyle
+}) => {
+  const palette =
+    colors[paletteKey] ?? colors[brandConfig.defaultPalette];
+
+  const preset =
+    motionPresets[motionStyle] ??
+    motionPresets[brandConfig.allowedMotionStyles[0]];
+
+  const headlineMotion = useEnterMotion({
+    startAt: 12,
+    preset
+  });
+
+  const subMotion = useEnterMotion({
+    startAt: 12 + preset.stagger,
+    preset
+  });
+
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: palette?.background ?? "#0b0f19",
-        color: palette?.headline ?? "#ffffff",
-        fontFamily: "system-ui",
-        justifyContent: "center",
+        backgroundColor: palette.background,
         padding: 80,
         boxSizing: "border-box",
+        fontFamily: fonts.headline.family,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center"
       }}
     >
-      <div style={{ fontSize: 84, fontWeight: 700, lineHeight: 1.05 }}>
-        {headline ?? "Branded Creative Tool"}
-      </div>
+      {/* LOGO */}
       <div
         style={{
-          marginTop: 18,
-          fontSize: 32,
-          color: palette?.subheadline ?? "#e5e7eb",
+          position: "absolute",
+          top: 48,
+          left: 48,
+          transform: `scale(${brandConfig.logoScale ?? 0.12})`,
+          transformOrigin: "top left"
         }}
       >
-        {subheadline ?? "MP4 test"}
+        <Img src={logo} />
+      </div>
+
+      {/* HEADLINE */}
+      <div
+        style={{
+          ...headlineMotion,
+          fontSize: 84,
+          fontWeight: fonts.headline.weight,
+          letterSpacing: fonts.headline.letterSpacing,
+          lineHeight: 1.05,
+          color: palette.headline,
+          maxWidth: 900
+        }}
+      >
+        {headline}
+      </div>
+
+      {/* SUBHEADLINE */}
+      <div
+        style={{
+          ...subMotion,
+          marginTop: 20,
+          fontFamily: fonts.subheadline.family,
+          fontSize: 32,
+          fontWeight: fonts.subheadline.weight,
+          letterSpacing: fonts.subheadline.letterSpacing,
+          color: palette.subheadline,
+          maxWidth: 760
+        }}
+      >
+        {subheadline}
       </div>
     </AbsoluteFill>
   );
 };
 
-const Root = () => {
-  return (
-    <>
-      <Composition
-        id="Template01"
-        component={Template01}
-        durationInFrames={120}
-        fps={30}
-        width={1080}
-        height={1080}
-        defaultProps={{
-          headline: "Branded Creative Tool",
-          subheadline: "Render MP4 ✅",
-          palette: {
-            background: "#0b0f19",
-            headline: "#ffffff",
-            subheadline: "#e5e7eb",
-          },
-        }}
-      />
-    </>
-  );
-};
+/* =======================
+   ROOT
+======================= */
+
+const Root = () => (
+  <Composition
+    id="Template01"
+    component={Template01}
+    width={1080}
+    height={1080}
+    fps={30}
+    durationInFrames={120}
+    defaultProps={{
+      headline: "OMNI Intelligence",
+      subheadline: "Infrastructure for autonomous systems",
+      paletteKey: brandConfig.defaultPalette,
+      motionStyle: brandConfig.allowedMotionStyles[0]
+    }}
+  />
+);
 
 registerRoot(Root);
