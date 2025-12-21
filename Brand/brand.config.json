@@ -1,0 +1,23 @@
+{
+  "id": "omni",
+  "name": "OMNI SA",
+  "description": "Technology & Intelligence Company",
+  "defaultPalette": "void",
+  "allowedMotionStyles": ["void", "pulse", "glitch-lite"],
+  "logoPosition": "top-left",
+  "logoScale": 0.12,
+  "toneOfVoice": "visionario, tecnico, minimale",
+  "aiRules": {
+    "noEmojis": true,
+    "noHashtags": true,
+    "noHype": true
+  },
+  "formats": [
+    {
+      "id": "post-square",
+      "width": 1080,
+      "height": 1080,
+      "duration": 120
+    }
+  ]
+}
