@@ -1,3 +1,4 @@
+import "../../Brand/fonts.css";
 import BrandFonts from "./brand-fonts";
 
 export const metadata = {
