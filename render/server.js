@@ -4,12 +4,12 @@ import path from "path";
 import os from "os";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
+import { Readable } from "stream";
 
 import { bundle } from "@remotion/bundler";
 import { getCompositions, renderMedia } from "@remotion/renderer";
 
 const app = express();
-
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
@@ -24,12 +24,13 @@ app.get("/health", (_req, res) => {
 
 /* =======================
    FONT PROXY (Google Drive)
-   Usa fetch NATIVO (Node 18+)
+   Node 20: fetch() returns Web ReadableStream
+   -> convert to Node stream using Readable.fromWeb()
 ======================= */
 
 const FONT_MAP = {
   "omni-display": "1fMgFTjZ0FjGXr1K2myhxkBPvw7eKf7ig",
-  "omni-mono": "1AS6bTQUY_Yqkwrt-h0IwJvFPZo1cz-yN"
+  "omni-mono": "1AS6bTQUY_Yqkwrt-h0IwJvFPZo1cz-yN",
 };
 
 app.get("/fonts/:fontId", async (req, res) => {
@@ -43,17 +44,28 @@ app.get("/fonts/:fontId", async (req, res) => {
   const driveUrl = `https://drive.google.com/uc?export=download&id=${driveFileId}`;
 
   try {
-    const response = await fetch(driveUrl);
+    const response = await fetch(driveUrl, { redirect: "follow" });
 
     if (!response.ok || !response.body) {
-      throw new Error("Failed to fetch font from Google Drive");
+      throw new Error(`Failed to fetch font (${response.status})`);
     }
 
+    // CORS per browser
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", "font/woff2");
 
-    // stream diretto
-    response.body.pipe(res);
+    // Se Drive manda un content-type sensato lo usiamo, altrimenti fallback
+    const ct = response.headers.get("content-type") || "font/woff2";
+    res.setHeader("Content-Type", ct);
+
+    // ✅ conversione WebStream -> NodeStream
+    const nodeStream = Readable.fromWeb(response.body);
+    nodeStream.on("error", (e) => {
+      console.error("Font stream error:", e);
+      if (!res.headersSent) res.status(500).end("Font stream error");
+      else res.end();
+    });
+
+    nodeStream.pipe(res);
   } catch (err) {
     console.error("Font proxy error:", err);
     res.status(500).send("Font proxy error");
@@ -64,12 +76,7 @@ app.get("/fonts/:fontId", async (req, res) => {
    REMOTION SETUP
 ======================= */
 
-const REMOTION_ENTRY = path.join(
-  process.cwd(),
-  "render",
-  "remotion",
-  "entry.jsx"
-);
+const REMOTION_ENTRY = path.join(process.cwd(), "render", "remotion", "entry.jsx");
 
 let bundled = null;
 
@@ -77,13 +84,12 @@ async function bundleOnce() {
   if (bundled) return bundled;
 
   console.log("[BUNDLE] bundling once…");
-
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "remotion-bundle-"));
 
   bundled = await bundle({
     entryPoint: REMOTION_ENTRY,
     outDir: tmpDir,
-    webpackOverride: (config) => config
+    webpackOverride: (config) => config,
   });
 
   console.log("[BUNDLE] ready ✅");
@@ -104,8 +110,8 @@ app.post("/render/mp4/start", async (req, res) => {
   const { headline, subheadline, paletteKey, motionStyle } = req.body;
 
   const jobId = `job_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
   jobs.set(jobId, { status: "queued", phase: "bundling" });
+
   res.json({ jobId });
 
   try {
@@ -113,12 +119,10 @@ app.post("/render/mp4/start", async (req, res) => {
     jobs.set(jobId, { status: "working", phase: "compositions" });
 
     const compositions = await getCompositions(bundleLocation, {
-      inputProps: { headline, subheadline, paletteKey, motionStyle }
+      inputProps: { headline, subheadline, paletteKey, motionStyle },
     });
 
-    const composition = compositions.find(
-      (c) => c.id === "Template01"
-    );
+    const composition = compositions.find((c) => c.id === "Template01");
     if (!composition) throw new Error("Composition not found");
 
     jobs.set(jobId, { status: "working", phase: "rendering" });
@@ -131,20 +135,13 @@ app.post("/render/mp4/start", async (req, res) => {
       codec: "h264",
       outputLocation: outPath,
       inputProps: { headline, subheadline, paletteKey, motionStyle },
-      timeoutInMilliseconds: 600000
+      timeoutInMilliseconds: 600000,
     });
 
-    jobs.set(jobId, {
-      status: "done",
-      phase: "done",
-      file: outPath
-    });
+    jobs.set(jobId, { status: "done", phase: "done", file: outPath });
   } catch (err) {
     console.error("[MP4] JOB ERROR", err);
-    jobs.set(jobId, {
-      status: "error",
-      error: err.message
-    });
+    jobs.set(jobId, { status: "error", error: err.message });
   }
 });
 
@@ -164,9 +161,7 @@ app.get("/render/mp4/status/:jobId", (req, res) => {
 
 app.get("/render/mp4/download/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
-  if (!job || job.status !== "done") {
-    return res.status(404).send("File not ready");
-  }
+  if (!job || job.status !== "done") return res.status(404).send("File not ready");
 
   res.setHeader("Content-Type", "video/mp4");
   createReadStream(job.file).pipe(res);
