@@ -4,13 +4,9 @@ import path from "path";
 import os from "os";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
-import fetch from "node-fetch";
 
 import { bundle } from "@remotion/bundler";
-import {
-  getCompositions,
-  renderMedia
-} from "@remotion/renderer";
+import { getCompositions, renderMedia } from "@remotion/renderer";
 
 const app = express();
 
@@ -22,18 +18,14 @@ const PORT = process.env.PORT || 10000;
 /* =======================
    HEALTH
 ======================= */
-
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
 /* =======================
    FONT PROXY (Google Drive)
+   Usa fetch NATIVO (Node 18+)
 ======================= */
-/*
-  Questi endpoint servono i font al browser
-  aggirando il CORS di Google Drive
-*/
 
 const FONT_MAP = {
   "omni-display": "1fMgFTjZ0FjGXr1K2myhxkBPvw7eKf7ig",
@@ -53,13 +45,14 @@ app.get("/fonts/:fontId", async (req, res) => {
   try {
     const response = await fetch(driveUrl);
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
       throw new Error("Failed to fetch font from Google Drive");
     }
 
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Content-Type", "font/woff2");
 
+    // stream diretto
     response.body.pipe(res);
   } catch (err) {
     console.error("Font proxy error:", err);
@@ -71,7 +64,12 @@ app.get("/fonts/:fontId", async (req, res) => {
    REMOTION SETUP
 ======================= */
 
-const REMOTION_ENTRY = path.join(process.cwd(), "render", "remotion", "entry.jsx");
+const REMOTION_ENTRY = path.join(
+  process.cwd(),
+  "render",
+  "remotion",
+  "entry.jsx"
+);
 
 let bundled = null;
 
@@ -107,11 +105,7 @@ app.post("/render/mp4/start", async (req, res) => {
 
   const jobId = `job_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-  jobs.set(jobId, {
-    status: "queued",
-    phase: "bundling"
-  });
-
+  jobs.set(jobId, { status: "queued", phase: "bundling" });
   res.json({ jobId });
 
   try {
@@ -119,15 +113,12 @@ app.post("/render/mp4/start", async (req, res) => {
     jobs.set(jobId, { status: "working", phase: "compositions" });
 
     const compositions = await getCompositions(bundleLocation, {
-      inputProps: {
-        headline,
-        subheadline,
-        paletteKey,
-        motionStyle
-      }
+      inputProps: { headline, subheadline, paletteKey, motionStyle }
     });
 
-    const composition = compositions.find((c) => c.id === "Template01");
+    const composition = compositions.find(
+      (c) => c.id === "Template01"
+    );
     if (!composition) throw new Error("Composition not found");
 
     jobs.set(jobId, { status: "working", phase: "rendering" });
@@ -139,12 +130,7 @@ app.post("/render/mp4/start", async (req, res) => {
       serveUrl: bundleLocation,
       codec: "h264",
       outputLocation: outPath,
-      inputProps: {
-        headline,
-        subheadline,
-        paletteKey,
-        motionStyle
-      },
+      inputProps: { headline, subheadline, paletteKey, motionStyle },
       timeoutInMilliseconds: 600000
     });
 
@@ -178,7 +164,6 @@ app.get("/render/mp4/status/:jobId", (req, res) => {
 
 app.get("/render/mp4/download/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
-
   if (!job || job.status !== "done") {
     return res.status(404).send("File not ready");
   }
