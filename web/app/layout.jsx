@@ -1,4 +1,4 @@
-import "../../Brand/fonts.css";
+import "./brand-fonts.css";
 
 export const metadata = {
   title: "Branded Creative Tool",
@@ -9,9 +9,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="it">
       <head />
-      <body style={{ margin: 0 }}>
-        {children}
-      </body>
+      <body style={{ margin: 0 }}>{children}</body>
     </html>
   );
 }
