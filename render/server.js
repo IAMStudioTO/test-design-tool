@@ -4,7 +4,6 @@ import path from "path";
 import os from "os";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
-import { Readable } from "stream";
 
 import { bundle } from "@remotion/bundler";
 import { getCompositions, renderMedia } from "@remotion/renderer";
@@ -18,54 +17,53 @@ const PORT = process.env.PORT || 10000;
 /* =======================
    HEALTH
 ======================= */
-app.get("/health", (_req, res) => {
-  res.json({ ok: true });
-});
+app.get("/health", (_req, res) => res.json({ ok: true }));
 
 /* =======================
    FONT PROXY (Google Drive)
-   Node 20: fetch() returns Web ReadableStream
-   -> convert to Node stream using Readable.fromWeb()
+   Buffer-based (no streaming issues)
 ======================= */
 
 const FONT_MAP = {
-  "omni-display": "1fMgFTjZ0FjGXr1K2myhxkBPvw7eKf7ig",
-  "omni-mono": "1AS6bTQUY_Yqkwrt-h0IwJvFPZo1cz-yN",
+  "omni-display": {
+    driveId: "1fMgFTjZ0FjGXr1K2myhxkBPvw7eKf7ig",
+    contentType: "font/ttf",
+    filename: "omni-display.ttf",
+  },
+  "omni-mono": {
+    driveId: "1AS6bTQUY_Yqkwrt-h0IwJvFPZo1cz-yN",
+    contentType: "font/ttf",
+    filename: "omni-mono.ttf",
+  },
 };
 
 app.get("/fonts/:fontId", async (req, res) => {
   const { fontId } = req.params;
-  const driveFileId = FONT_MAP[fontId];
+  const entry = FONT_MAP[fontId];
 
-  if (!driveFileId) {
-    return res.status(404).send("Font not found");
-  }
+  if (!entry) return res.status(404).send("Font not found");
 
-  const driveUrl = `https://drive.google.com/uc?export=download&id=${driveFileId}`;
+  const driveUrl = `https://drive.google.com/uc?export=download&id=${entry.driveId}`;
 
   try {
-    const response = await fetch(driveUrl, { redirect: "follow" });
+    const r = await fetch(driveUrl, { redirect: "follow" });
 
-    if (!response.ok || !response.body) {
-      throw new Error(`Failed to fetch font (${response.status})`);
+    if (!r.ok) {
+      throw new Error(`Drive fetch failed (${r.status})`);
     }
 
-    // CORS per browser
+    const ab = await r.arrayBuffer();
+    const buf = Buffer.from(ab);
+
+    // CORS (fondamentale per @font-face cross-origin)
     res.setHeader("Access-Control-Allow-Origin", "*");
 
-    // Se Drive manda un content-type sensato lo usiamo, altrimenti fallback
-    const ct = response.headers.get("content-type") || "font/woff2";
-    res.setHeader("Content-Type", ct);
+    // Headers “puliti”
+    res.setHeader("Content-Type", entry.contentType);
+    res.setHeader("Content-Disposition", `inline; filename="${entry.filename}"`);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
 
-    // ✅ conversione WebStream -> NodeStream
-    const nodeStream = Readable.fromWeb(response.body);
-    nodeStream.on("error", (e) => {
-      console.error("Font stream error:", e);
-      if (!res.headersSent) res.status(500).end("Font stream error");
-      else res.end();
-    });
-
-    nodeStream.pipe(res);
+    res.status(200).end(buf);
   } catch (err) {
     console.error("Font proxy error:", err);
     res.status(500).send("Font proxy error");
@@ -111,7 +109,6 @@ app.post("/render/mp4/start", async (req, res) => {
 
   const jobId = `job_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   jobs.set(jobId, { status: "queued", phase: "bundling" });
-
   res.json({ jobId });
 
   try {
