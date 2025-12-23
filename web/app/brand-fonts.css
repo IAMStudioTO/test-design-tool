@@ -1,9 +1,6 @@
-/* Brand fonts (served via Render proxy) */
-/* I file su Drive sono TTF, quindi format("truetype") */
-
 @font-face {
   font-family: "OMNI Display";
-  src: url("https://test-design-tool.onrender.com/fonts/omni-display?v=1") format("truetype");
+  src: url("https://test-design-tool.onrender.com/fonts/omni-display?v=3") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -11,7 +8,7 @@
 
 @font-face {
   font-family: "OMNI Mono";
-  src: url("https://test-design-tool.onrender.com/fonts/omni-mono?v=1") format("truetype");
+  src: url("https://test-design-tool.onrender.com/fonts/omni-mono?v=3") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
