@@ -20,10 +20,8 @@ const PORT = process.env.PORT || 10000;
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 /* =======================
-   FONT PROXY (Google Drive)
-   Buffer-based (no streaming issues)
+   FONT PROXY (Google Drive) - buffer safe
 ======================= */
-
 const FONT_MAP = {
   "omni-display": {
     driveId: "1fMgFTjZ0FjGXr1K2myhxkBPvw7eKf7ig",
@@ -40,25 +38,18 @@ const FONT_MAP = {
 app.get("/fonts/:fontId", async (req, res) => {
   const { fontId } = req.params;
   const entry = FONT_MAP[fontId];
-
   if (!entry) return res.status(404).send("Font not found");
 
   const driveUrl = `https://drive.google.com/uc?export=download&id=${entry.driveId}`;
 
   try {
     const r = await fetch(driveUrl, { redirect: "follow" });
-
-    if (!r.ok) {
-      throw new Error(`Drive fetch failed (${r.status})`);
-    }
+    if (!r.ok) throw new Error(`Drive fetch failed (${r.status})`);
 
     const ab = await r.arrayBuffer();
     const buf = Buffer.from(ab);
 
-    // CORS (fondamentale per @font-face cross-origin)
     res.setHeader("Access-Control-Allow-Origin", "*");
-
-    // Headers “puliti”
     res.setHeader("Content-Type", entry.contentType);
     res.setHeader("Content-Disposition", `inline; filename="${entry.filename}"`);
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
@@ -73,7 +64,6 @@ app.get("/fonts/:fontId", async (req, res) => {
 /* =======================
    REMOTION SETUP
 ======================= */
-
 const REMOTION_ENTRY = path.join(process.cwd(), "render", "remotion", "entry.jsx");
 
 let bundled = null;
@@ -97,15 +87,13 @@ async function bundleOnce() {
 /* =======================
    JOB STATE
 ======================= */
-
 const jobs = new Map();
 
 /* =======================
    START MP4 RENDER
 ======================= */
-
 app.post("/render/mp4/start", async (req, res) => {
-  const { headline, subheadline, paletteKey, motionStyle } = req.body;
+  const { headline, subheadline, paletteKey, motionStyle, formatKey } = req.body;
 
   const jobId = `job_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   jobs.set(jobId, { status: "queued", phase: "bundling" });
@@ -116,11 +104,16 @@ app.post("/render/mp4/start", async (req, res) => {
     jobs.set(jobId, { status: "working", phase: "compositions" });
 
     const compositions = await getCompositions(bundleLocation, {
-      inputProps: { headline, subheadline, paletteKey, motionStyle },
+      inputProps: { headline, subheadline, paletteKey, motionStyle, formatKey },
     });
 
-    const composition = compositions.find((c) => c.id === "Template01");
-    if (!composition) throw new Error("Composition not found");
+    const compositionId = `Template01_${formatKey || "ig_post_1_1"}`;
+    const composition = compositions.find((c) => c.id === compositionId);
+
+    if (!composition) {
+      const available = compositions.map((c) => c.id).slice(0, 30);
+      throw new Error(`Composition not found: ${compositionId}. Available: ${available.join(", ")}`);
+    }
 
     jobs.set(jobId, { status: "working", phase: "rendering" });
 
@@ -131,7 +124,7 @@ app.post("/render/mp4/start", async (req, res) => {
       serveUrl: bundleLocation,
       codec: "h264",
       outputLocation: outPath,
-      inputProps: { headline, subheadline, paletteKey, motionStyle },
+      inputProps: { headline, subheadline, paletteKey, motionStyle, formatKey },
       timeoutInMilliseconds: 600000,
     });
 
@@ -145,7 +138,6 @@ app.post("/render/mp4/start", async (req, res) => {
 /* =======================
    JOB STATUS
 ======================= */
-
 app.get("/render/mp4/status/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: "Job not found" });
@@ -155,7 +147,6 @@ app.get("/render/mp4/status/:jobId", (req, res) => {
 /* =======================
    DOWNLOAD MP4
 ======================= */
-
 app.get("/render/mp4/download/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job || job.status !== "done") return res.status(404).send("File not ready");
@@ -167,7 +158,6 @@ app.get("/render/mp4/download/:jobId", (req, res) => {
 /* =======================
    START SERVER
 ======================= */
-
 app.listen(PORT, () => {
   console.log("Render service listening on :", PORT);
 });
