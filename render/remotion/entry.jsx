@@ -6,7 +6,7 @@ import { Composition, AbsoluteFill } from "remotion";
 import brandColors from "../../Brand/colors.json";
 import brandFonts from "../../Brand/fonts.json";
 
-// Deve combaciare con i formati del frontend
+// Deve combaciare coi formatKey del frontend (con underscore)
 const FORMATS = [
   { key: "ig_post_1_1", width: 1080, height: 1080 },
   { key: "ig_post_4_5", width: 1080, height: 1350 },
@@ -28,7 +28,7 @@ const DURATION_IN_FRAMES = 120;
 const FONT_DISPLAY = brandFonts?.headline?.family || "OMNI Display";
 const FONT_MONO = brandFonts?.subheadline?.family || "OMNI Mono";
 
-// Font via proxy (stesso dominio Render, ok in Chromium)
+// Font via proxy
 const FONT_CSS = `
 @font-face{
   font-family:"${FONT_DISPLAY}";
@@ -47,7 +47,10 @@ const FONT_CSS = `
 `;
 
 const Template01 = ({ headline, subheadline, paletteKey }) => {
-  const palette = brandColors?.[paletteKey] || brandColors?.[Object.keys(brandColors)[0]] || {};
+  const palette =
+    brandColors?.[paletteKey] ||
+    brandColors?.[Object.keys(brandColors)[0]] ||
+    {};
 
   return (
     <AbsoluteFill
@@ -100,13 +103,16 @@ const Template01 = ({ headline, subheadline, paletteKey }) => {
   );
 };
 
+// ✅ converte ig_post_1_1 -> ig-post-1-1 (id safe per Remotion)
+const toIdSafe = (formatKey) => (formatKey || "").replaceAll("_", "-");
+
 const Root = () => {
   return (
     <>
       {FORMATS.map((f) => (
         <Composition
           key={f.key}
-          id={`Template01_${f.key}`}
+          id={`Template01-${toIdSafe(f.key)}`}
           component={Template01}
           durationInFrames={DURATION_IN_FRAMES}
           fps={FPS}
