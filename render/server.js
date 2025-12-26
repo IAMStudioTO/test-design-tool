@@ -20,7 +20,7 @@ const PORT = process.env.PORT || 10000;
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 /* =======================
-   FONT PROXY (Google Drive) - buffer safe
+   FONT PROXY (Google Drive)
 ======================= */
 const FONT_MAP = {
   "omni-display": {
@@ -36,27 +36,22 @@ const FONT_MAP = {
 };
 
 app.get("/fonts/:fontId", async (req, res) => {
-  const { fontId } = req.params;
-  const entry = FONT_MAP[fontId];
+  const entry = FONT_MAP[req.params.fontId];
   if (!entry) return res.status(404).send("Font not found");
 
-  const driveUrl = `https://drive.google.com/uc?export=download&id=${entry.driveId}`;
-
   try {
-    const r = await fetch(driveUrl, { redirect: "follow" });
-    if (!r.ok) throw new Error(`Drive fetch failed (${r.status})`);
-
-    const ab = await r.arrayBuffer();
-    const buf = Buffer.from(ab);
+    const r = await fetch(
+      `https://drive.google.com/uc?export=download&id=${entry.driveId}`,
+      { redirect: "follow" }
+    );
+    const buf = Buffer.from(await r.arrayBuffer());
 
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Content-Type", entry.contentType);
-    res.setHeader("Content-Disposition", `inline; filename="${entry.filename}"`);
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-
-    res.status(200).end(buf);
-  } catch (err) {
-    console.error("Font proxy error:", err);
+    res.end(buf);
+  } catch (e) {
+    console.error(e);
     res.status(500).send("Font proxy error");
   }
 });
@@ -64,23 +59,28 @@ app.get("/fonts/:fontId", async (req, res) => {
 /* =======================
    REMOTION SETUP
 ======================= */
-const REMOTION_ENTRY = path.join(process.cwd(), "render", "remotion", "entry.jsx");
+/**
+ * 🔴 FIX QUI
+ * Prima: path.join(process.cwd(), "render", "remotion", "entry.jsx")
+ * Ora:    path.join(process.cwd(), "remotion", "entry.jsx")
+ */
+const REMOTION_ENTRY = path.join(
+  process.cwd(),
+  "remotion",
+  "entry.jsx"
+);
 
 let bundled = null;
 
 async function bundleOnce() {
   if (bundled) return bundled;
 
-  console.log("[BUNDLE] bundling once…");
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "remotion-bundle-"));
-
   bundled = await bundle({
     entryPoint: REMOTION_ENTRY,
     outDir: tmpDir,
-    webpackOverride: (config) => config,
   });
 
-  console.log("[BUNDLE] ready ✅");
   return bundled;
 }
 
@@ -90,7 +90,7 @@ async function bundleOnce() {
 const jobs = new Map();
 
 /* =======================
-   START MP4 RENDER
+   START MP4
 ======================= */
 app.post("/render/mp4/start", async (req, res) => {
   const { headline, subheadline, paletteKey, motionStyle, formatKey } = req.body;
@@ -100,64 +100,54 @@ app.post("/render/mp4/start", async (req, res) => {
   res.json({ jobId });
 
   try {
-    const bundleLocation = await bundleOnce();
-    jobs.set(jobId, { status: "working", phase: "compositions" });
+    const serveUrl = await bundleOnce();
 
-    const compositions = await getCompositions(bundleLocation, {
+    const compositions = await getCompositions(serveUrl, {
       inputProps: { headline, subheadline, paletteKey, motionStyle, formatKey },
     });
 
-    const compositionId = `Template01_${formatKey || "ig_post_1_1"}`;
+    const compositionId = `Template01_${formatKey}`;
     const composition = compositions.find((c) => c.id === compositionId);
 
     if (!composition) {
-      const available = compositions.map((c) => c.id).slice(0, 30);
-      throw new Error(`Composition not found: ${compositionId}. Available: ${available.join(", ")}`);
+      throw new Error(`Composition not found: ${compositionId}`);
     }
-
-    jobs.set(jobId, { status: "working", phase: "rendering" });
 
     const outPath = path.join(os.tmpdir(), `${jobId}.mp4`);
 
     await renderMedia({
       composition,
-      serveUrl: bundleLocation,
+      serveUrl,
       codec: "h264",
       outputLocation: outPath,
       inputProps: { headline, subheadline, paletteKey, motionStyle, formatKey },
-      timeoutInMilliseconds: 600000,
     });
 
-    jobs.set(jobId, { status: "done", phase: "done", file: outPath });
-  } catch (err) {
-    console.error("[MP4] JOB ERROR", err);
-    jobs.set(jobId, { status: "error", error: err.message });
+    jobs.set(jobId, { status: "done", file: outPath });
+  } catch (e) {
+    console.error(e);
+    jobs.set(jobId, { status: "error", error: e.message });
   }
 });
 
 /* =======================
-   JOB STATUS
+   STATUS
 ======================= */
 app.get("/render/mp4/status/:jobId", (req, res) => {
-  const job = jobs.get(req.params.jobId);
-  if (!job) return res.status(404).json({ error: "Job not found" });
-  res.json({ job });
+  res.json({ job: jobs.get(req.params.jobId) });
 });
 
 /* =======================
-   DOWNLOAD MP4
+   DOWNLOAD
 ======================= */
 app.get("/render/mp4/download/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
-  if (!job || job.status !== "done") return res.status(404).send("File not ready");
+  if (!job || job.status !== "done") return res.sendStatus(404);
 
   res.setHeader("Content-Type", "video/mp4");
   createReadStream(job.file).pipe(res);
 });
 
-/* =======================
-   START SERVER
-======================= */
 app.listen(PORT, () => {
   console.log("Render service listening on :", PORT);
 });
