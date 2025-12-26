@@ -15,7 +15,7 @@ const SUBHEADLINE_MAX = 90;
 const RENDER_URL =
   process.env.NEXT_PUBLIC_RENDER_URL || "https://test-design-tool.onrender.com";
 
-// Formati (puoi aggiungerne quanti vuoi)
+// Formati
 const FORMATS = [
   { key: "ig_post_1_1", group: "Instagram", name: "Instagram Post (1:1)", width: 1080, height: 1080 },
   { key: "ig_post_4_5", group: "Instagram", name: "Instagram Post (4:5)", width: 1080, height: 1350 },
@@ -31,15 +31,13 @@ const FORMATS = [
   { key: "x_post", group: "X / Twitter", name: "X Post (16:9)", width: 1200, height: 675 },
 ];
 
-// Safe area molto semplice (puoi raffinarla più avanti)
+// Safe area semplice
 function getSafeArea(formatKey, w, h) {
-  // esempio: story/reel più “safe” ai bordi
   if (formatKey.includes("9_16")) {
     const padX = Math.round(w * 0.06);
     const padY = Math.round(h * 0.08);
     return { x: padX, y: padY, w: w - padX * 2, h: h - padY * 2 };
   }
-  // default: nessuna safe area
   return null;
 }
 
@@ -64,7 +62,6 @@ function groupedFormats() {
 }
 
 function paletteOptionsFromBrandColors(colorsObj) {
-  // colorsObj: { void: {...}, signal: {...} } ecc.
   const keys = Object.keys(colorsObj || {});
   return keys.map((k) => {
     const v = colorsObj[k] || {};
@@ -106,12 +103,17 @@ function TemplateCanvas({
       style={{
         width,
         height,
-        borderRadius: 24,
         overflow: "hidden",
+
+        // ✅ EXPORT CLEAN: niente bordi arrotondati
+        borderRadius: 0,
+
+        // ✅ EXPORT CLEAN: niente shadow
+        boxShadow: "none",
+
         background: palette?.background || "#0b0f19",
         color: palette?.headline || "#ffffff",
         position: "relative",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
       }}
     >
       <div style={{ padding: 48 }}>
@@ -176,16 +178,8 @@ function TemplateCanvas({
 
 export default function Page() {
   const formatsByGroup = useMemo(() => groupedFormats(), []);
-
-  const paletteOptions = useMemo(
-    () => paletteOptionsFromBrandColors(brandColors),
-    []
-  );
-
-  const motionOptions = useMemo(
-    () => motionOptionsFromBrandMotion(brandMotion),
-    []
-  );
+  const paletteOptions = useMemo(() => paletteOptionsFromBrandColors(brandColors), []);
+  const motionOptions = useMemo(() => motionOptionsFromBrandMotion(brandMotion), []);
 
   const defaultPaletteKey = paletteOptions[0]?.key || "void";
   const defaultMotionKey = motionOptions[0]?.key || "void";
@@ -197,13 +191,10 @@ export default function Page() {
   const [showSafeArea, setShowSafeArea] = useState(false);
   const [motionKey, setMotionKey] = useState(defaultMotionKey);
 
-  const [mp4State, setMp4State] = useState({
-    loading: false,
-    phase: "",
-    error: "",
-  });
+  const [mp4State, setMp4State] = useState({ loading: false, phase: "", error: "" });
 
-  const canvasRef = useRef(null);
+  // ✅ Ref per EXPORT 1:1 (nascosto)
+  const exportRef = useRef(null);
 
   const selectedFormat = useMemo(() => {
     return FORMATS.find((f) => f.key === formatKey) || FORMATS[0];
@@ -213,18 +204,28 @@ export default function Page() {
     return brandColors?.[paletteKey] || {};
   }, [paletteKey]);
 
+  // Preview: scala automaticamente per stare sullo schermo
+  const previewScale = useMemo(() => {
+    const maxPreviewWidth = 700; // puoi cambiare
+    const s = maxPreviewWidth / selectedFormat.width;
+    return Math.min(1, Math.max(0.25, s));
+  }, [selectedFormat.width]);
+
   async function onExportPng() {
     setMp4State((s) => ({ ...s, error: "" }));
-    if (!canvasRef.current) return;
+    if (!exportRef.current) return;
 
-    const dataUrl = await toPng(canvasRef.current, {
+    // ✅ PNG ESATTO (width/height reali)
+    const dataUrl = await toPng(exportRef.current, {
       cacheBust: true,
-      pixelRatio: 2,
+      pixelRatio: 1, // 1 = esatto: 1080x1080 -> 1080x1080
+      width: selectedFormat.width,
+      height: selectedFormat.height,
     });
 
     const a = document.createElement("a");
     a.href = dataUrl;
-    a.download = `${brandConfig?.slug || "brand"}_${formatKey}.png`;
+    a.download = `${brandConfig?.slug || "brand"}_${formatKey}_${selectedFormat.width}x${selectedFormat.height}.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -239,6 +240,8 @@ export default function Page() {
         subheadline,
         paletteKey,
         motionStyle: motionKey,
+        // Nota: per ora il backend video non cambia formato.
+        // Lo estendiamo nel prossimo step per usare width/height.
       };
 
       const startRes = await fetch(`${RENDER_URL}/render/mp4/start`, {
@@ -247,15 +250,17 @@ export default function Page() {
         body: JSON.stringify(payload),
       });
 
-      if (!startRes.ok) {
-        throw new Error(`Start MP4 failed (${startRes.status})`);
-      }
+      if (!startRes.ok) throw new Error(`Start MP4 failed (${startRes.status})`);
 
       const { jobId } = await startRes.json();
       if (!jobId) throw new Error("No jobId returned");
 
-      // polling
-      const poll = async () => {
+      const startTime = Date.now();
+      const TIMEOUT_MS = 10 * 60 * 1000;
+
+      while (true) {
+        if (Date.now() - startTime > TIMEOUT_MS) throw new Error("Timeout MP4 render");
+
         const statusRes = await fetch(`${RENDER_URL}/render/mp4/status/${jobId}`);
         if (!statusRes.ok) throw new Error(`Status failed (${statusRes.status})`);
 
@@ -263,31 +268,11 @@ export default function Page() {
         const job = data?.job;
 
         if (!job) throw new Error("Invalid status payload");
+        if (job.status === "error") throw new Error(job.error || "Render error");
 
-        if (job.status === "error") {
-          throw new Error(job.error || "Render error");
-        }
-
-        if (job.status === "done") {
-          return "done";
-        }
+        if (job.status === "done") break;
 
         setMp4State({ loading: true, phase: job.phase || "working", error: "" });
-        return "continue";
-      };
-
-      const startTime = Date.now();
-      const TIMEOUT_MS = 10 * 60 * 1000; // 10 min
-
-      while (true) {
-        if (Date.now() - startTime > TIMEOUT_MS) {
-          throw new Error("Timeout MP4 render");
-        }
-
-        const r = await poll();
-        if (r === "done") break;
-
-        // attesa breve
         await new Promise((res) => setTimeout(res, 1200));
       }
 
@@ -326,9 +311,7 @@ export default function Page() {
       >
         <h2 style={{ marginTop: 0, marginBottom: 16 }}>Contenuti</h2>
 
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
-          Headline
-        </label>
+        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Headline</label>
         <input
           value={headline}
           onChange={(e) => setHeadline(e.target.value.slice(0, HEADLINE_MAX))}
@@ -343,9 +326,7 @@ export default function Page() {
           {headline.length}/{HEADLINE_MAX} caratteri
         </div>
 
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
-          Subheadline
-        </label>
+        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Subheadline</label>
         <textarea
           value={subheadline}
           onChange={(e) => setSubheadline(e.target.value.slice(0, SUBHEADLINE_MAX))}
@@ -361,9 +342,7 @@ export default function Page() {
           {subheadline.length}/{SUBHEADLINE_MAX} caratteri
         </div>
 
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
-          Palette colore
-        </label>
+        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Palette colore</label>
         <select
           value={paletteKey}
           onChange={(e) => setPaletteKey(e.target.value)}
@@ -382,9 +361,7 @@ export default function Page() {
           ))}
         </select>
 
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
-          Destinazione
-        </label>
+        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Destinazione</label>
         <select
           value={formatKey}
           onChange={(e) => setFormatKey(e.target.value)}
@@ -407,9 +384,7 @@ export default function Page() {
           ))}
         </select>
 
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>
-          Motion preset
-        </label>
+        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Motion preset</label>
         <select
           value={motionKey}
           onChange={(e) => setMotionKey(e.target.value)}
@@ -450,7 +425,7 @@ export default function Page() {
             cursor: "pointer",
           }}
         >
-          Esporta PNG
+          Esporta PNG ({selectedFormat.width}×{selectedFormat.height})
         </button>
 
         <button
@@ -484,20 +459,8 @@ export default function Page() {
 
       {/* RIGHT PREVIEW */}
       <section style={{ display: "flex", justifyContent: "center" }}>
-        <div
-          style={{
-            width: "100%",
-            display: "flex",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            ref={canvasRef}
-            style={{
-              transform: "scale(0.8)",
-              transformOrigin: "top center",
-            }}
-          >
+        <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+          <div style={{ transform: `scale(${previewScale})`, transformOrigin: "top center" }}>
             <TemplateCanvas
               width={selectedFormat.width}
               height={selectedFormat.height}
@@ -510,6 +473,21 @@ export default function Page() {
           </div>
         </div>
       </section>
+
+      {/* ✅ EXPORT CANVAS HIDDEN (1:1, dimensioni reali) */}
+      <div style={{ position: "absolute", left: -99999, top: 0 }}>
+        <div ref={exportRef}>
+          <TemplateCanvas
+            width={selectedFormat.width}
+            height={selectedFormat.height}
+            palette={palette}
+            headline={headline}
+            subheadline={subheadline}
+            showSafeAreaOverlay={false} // export pulito
+            formatKey={formatKey}
+          />
+        </div>
+      </div>
     </main>
   );
 }
