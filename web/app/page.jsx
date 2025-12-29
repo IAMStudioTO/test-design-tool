@@ -11,20 +11,35 @@ import brandConfig from "../../Brand/brand.config.json";
 const HEADLINE_MAX = 40;
 const SUBHEADLINE_MAX = 90;
 
+// Backend Render URL
 const RENDER_URL =
   process.env.NEXT_PUBLIC_RENDER_URL || "https://test-design-tool.onrender.com";
 
+// Formati
 const FORMATS = [
   { key: "ig_post_1_1", group: "Instagram", name: "Instagram Post (1:1)", width: 1080, height: 1080 },
   { key: "ig_post_4_5", group: "Instagram", name: "Instagram Post (4:5)", width: 1080, height: 1350 },
   { key: "ig_story_9_16", group: "Instagram", name: "Instagram Story (9:16)", width: 1080, height: 1920 },
+
   { key: "reel_9_16", group: "Video", name: "Reel / TikTok (9:16)", width: 1080, height: 1920 },
   { key: "yt_short_9_16", group: "Video", name: "YouTube Short (9:16)", width: 1080, height: 1920 },
+
   { key: "li_square", group: "LinkedIn", name: "LinkedIn Square (1:1)", width: 1080, height: 1080 },
   { key: "li_landscape", group: "LinkedIn", name: "LinkedIn Landscape (1.91:1)", width: 1200, height: 628 },
   { key: "li_banner", group: "LinkedIn", name: "LinkedIn Profile Banner", width: 1128, height: 191 },
+
   { key: "x_post", group: "X / Twitter", name: "X Post (16:9)", width: 1200, height: 675 },
 ];
+
+// Safe area semplice
+function getSafeArea(formatKey, w, h) {
+  if (formatKey.includes("9_16")) {
+    const padX = Math.round(w * 0.06);
+    const padY = Math.round(h * 0.08);
+    return { x: padX, y: padY, w: w - padX * 2, h: h - padY * 2 };
+  }
+  return null;
+}
 
 function groupedFormats() {
   const groups = {};
@@ -36,17 +51,16 @@ function groupedFormats() {
 }
 
 function paletteOptionsFromBrandColors(colorsObj) {
-  return Object.keys(colorsObj || {}).map((k) => ({
-    key: k,
-    label: colorsObj[k]?.name || k,
-  }));
+  const keys = Object.keys(colorsObj || {});
+  return keys.map((k) => {
+    const v = colorsObj[k] || {};
+    return { key: k, label: v.name || k };
+  });
 }
 
 function motionOptionsFromBrandMotion(motionObj) {
-  return Object.keys(motionObj || {}).map((k) => ({
-    key: k,
-    label: motionObj[k]?.name || k,
-  }));
+  const keys = Object.keys(motionObj || {});
+  return keys.map((k) => ({ key: k, label: motionObj[k]?.name || k }));
 }
 
 function TemplateCanvas({
@@ -58,16 +72,18 @@ function TemplateCanvas({
   showSafeAreaOverlay,
   formatKey,
 }) {
+  const safe = getSafeArea(formatKey, width, height);
+
   const headlineFontStyle = {
-    fontFamily: `"${brandFonts?.headline?.family}", system-ui, sans-serif`,
-    fontWeight: brandFonts?.headline?.weight,
-    letterSpacing: `${brandFonts?.headline?.letterSpacing}px`,
+    fontFamily: `"${brandFonts?.headline?.family || "OMNI Display"}", system-ui, sans-serif`,
+    fontWeight: brandFonts?.headline?.weight ?? 600,
+    letterSpacing: `${brandFonts?.headline?.letterSpacing ?? 0}px`,
   };
 
   const subheadlineFontStyle = {
-    fontFamily: `"${brandFonts?.subheadline?.family}", monospace`,
-    fontWeight: brandFonts?.subheadline?.weight,
-    letterSpacing: `${brandFonts?.subheadline?.letterSpacing}px`,
+    fontFamily: `"${brandFonts?.subheadline?.family || "OMNI Mono"}", monospace`,
+    fontWeight: brandFonts?.subheadline?.weight ?? 400,
+    letterSpacing: `${brandFonts?.subheadline?.letterSpacing ?? 0}px`,
   };
 
   return (
@@ -75,28 +91,31 @@ function TemplateCanvas({
       style={{
         width,
         height,
-        background: palette?.background,
-        color: palette?.headline,
-        position: "relative",
         overflow: "hidden",
+        borderRadius: 0,
+        boxShadow: "none",
+        background: palette?.background || "#0b0f19",
+        color: palette?.headline || "#ffffff",
+        position: "relative",
       }}
     >
-      {/* LOGO — SEMPRE DA /public/logo.svg */}
+      {/* ✅ LOGO SVG — SCALABILE, DA /public/logo.svg */}
       <img
         src="/logo.svg"
         alt="Brand logo"
         style={{
           position: "absolute",
-          top: 32,
-          left: 32,
+          top: 48,
+          left: 48,
           width: Math.round(width * (brandConfig?.logoScale ?? 0.12)),
           height: "auto",
           opacity: 0.9,
+          pointerEvents: "none",
         }}
       />
 
       <div style={{ padding: 48 }}>
-        <div style={{ fontSize: 14, opacity: 0.6, color: palette?.meta }}>
+        <div style={{ fontSize: 14, opacity: 0.65, color: palette?.meta || "#9ca3af" }}>
           {brandConfig?.templateLabel || "TEMPLATE 01"}
         </div>
 
@@ -117,7 +136,7 @@ function TemplateCanvas({
             margin: "18px 0 0 0",
             fontSize: Math.round(width * 0.024),
             lineHeight: 1.25,
-            color: palette?.subheadline,
+            color: palette?.subheadline || "rgba(255,255,255,0.9)",
           }}
         >
           {subheadline}
@@ -130,12 +149,27 @@ function TemplateCanvas({
             bottom: 40,
             fontSize: 14,
             opacity: 0.6,
-            color: palette?.meta,
+            color: palette?.meta || "#9ca3af",
           }}
         >
           {brandConfig?.footerText || "iamstudio.to"}
         </div>
       </div>
+
+      {showSafeAreaOverlay && safe ? (
+        <div
+          style={{
+            position: "absolute",
+            left: safe.x,
+            top: safe.y,
+            width: safe.w,
+            height: safe.h,
+            border: "2px dashed rgba(255,255,255,0.35)",
+            borderRadius: 12,
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -145,29 +179,32 @@ export default function Page() {
   const paletteOptions = useMemo(() => paletteOptionsFromBrandColors(brandColors), []);
   const motionOptions = useMemo(() => motionOptionsFromBrandMotion(brandMotion), []);
 
+  const defaultPaletteKey = paletteOptions[0]?.key || "void";
+  const defaultMotionKey = motionOptions[0]?.key || "void";
+
   const [headline, setHeadline] = useState("Ciao");
   const [subheadline, setSubheadline] = useState("Come stai?");
-  const [paletteKey, setPaletteKey] = useState(paletteOptions[0]?.key);
+  const [paletteKey, setPaletteKey] = useState(defaultPaletteKey);
   const [formatKey, setFormatKey] = useState(FORMATS[0].key);
   const [showSafeArea, setShowSafeArea] = useState(false);
-  const [motionKey, setMotionKey] = useState(motionOptions[0]?.key);
+  const [motionKey, setMotionKey] = useState(defaultMotionKey);
 
   const exportRef = useRef(null);
 
-  const selectedFormat = FORMATS.find((f) => f.key === formatKey);
-  const palette = brandColors?.[paletteKey];
+  const selectedFormat = FORMATS.find((f) => f.key === formatKey) || FORMATS[0];
+  const palette = brandColors?.[paletteKey] || {};
 
   async function onExportPng() {
     const dataUrl = await toPng(exportRef.current, {
       cacheBust: true,
+      pixelRatio: 1,
       width: selectedFormat.width,
       height: selectedFormat.height,
-      pixelRatio: 1,
     });
 
     const a = document.createElement("a");
     a.href = dataUrl;
-    a.download = `export_${formatKey}.png`;
+    a.download = `${brandConfig?.slug || "brand"}_${formatKey}.png`;
     a.click();
   }
 
@@ -180,43 +217,8 @@ export default function Page() {
         padding: 24,
       }}
     >
-      {/* LEFT */}
-      <section style={{ background: "#fff", padding: 16, borderRadius: 16 }}>
-        <h2>Contenuti</h2>
-
-        <label>Headline</label>
-        <input value={headline} onChange={(e) => setHeadline(e.target.value)} />
-
-        <label>Subheadline</label>
-        <textarea value={subheadline} onChange={(e) => setSubheadline(e.target.value)} />
-
-        <label>Palette colore</label>
-        <select value={paletteKey} onChange={(e) => setPaletteKey(e.target.value)}>
-          {paletteOptions.map((p) => (
-            <option key={p.key} value={p.key}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-
-        <label>Destinazione</label>
-        <select value={formatKey} onChange={(e) => setFormatKey(e.target.value)}>
-          {Object.entries(formatsByGroup).map(([group, items]) => (
-            <optgroup key={group} label={group}>
-              {items.map((f) => (
-                <option key={f.key} value={f.key}>
-                  {f.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-
-        <button onClick={onExportPng}>Esporta PNG</button>
-      </section>
-
-      {/* RIGHT */}
-      <section style={{ display: "flex", justifyContent: "center" }}>
+      <section />
+      <section>
         <div ref={exportRef}>
           <TemplateCanvas
             width={selectedFormat.width}
