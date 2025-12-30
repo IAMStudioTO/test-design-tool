@@ -1,4 +1,4 @@
-import brandFonts from "../../../Brand/fonts.json";
+import brandFonts from "../../../../Brand/fonts.json";
 
 export default function Template04({ width, height, palette, content, brand }) {
   const H = {
@@ -14,7 +14,6 @@ export default function Template04({ width, height, palette, content, brand }) {
 
   return (
     <div style={{ width, height, background: palette?.background || "#0b0f19", color: palette?.headline || "#fff", position: "relative", overflow: "hidden" }}>
-      {/* corner accent */}
       <div style={{ position: "absolute", right: -180, top: -180, width: 360, height: 360, borderRadius: 999, background: palette?.accent || "#7C3AED", opacity: 0.18 }} />
 
       <div style={{ padding: 64 }}>
