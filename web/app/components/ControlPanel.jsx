@@ -44,7 +44,6 @@ export default function ControlPanel({
     >
       <h2 style={{ marginTop: 0, marginBottom: 16 }}>Contenuti</h2>
 
-      {/* TEMPLATE SELECT (max 4) */}
       <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Template</label>
       <select
         value={templateId}
@@ -64,7 +63,6 @@ export default function ControlPanel({
         ))}
       </select>
 
-      {/* ✅ SOLO 3 CAMPI EDITABILI */}
       <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Heading</label>
       <input
         value={headline}
@@ -109,7 +107,6 @@ export default function ControlPanel({
 
       <hr style={{ border: "none", borderTop: "1px solid #e5e7eb", margin: "16px 0" }} />
 
-      {/* Brand controls (puoi nasconderli se vuoi) */}
       <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Palette colore</label>
       <select
         value={paletteKey}
