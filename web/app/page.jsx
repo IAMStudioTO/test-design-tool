@@ -3,9 +3,9 @@
 import { useMemo, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 
-import brandColors from "../Brand/colors.json";
-import brandConfig from "../Brand/brand.config.json";
-import brandMotion from "../Brand/motion.json";
+import brandColors from "../../Brand/colors.json";
+import brandConfig from "../../Brand/brand.config.json";
+import brandMotion from "../../Brand/motion.json";
 
 import ControlPanel from "./components/ControlPanel";
 import { TEMPLATE_LIST, getTemplateById } from "./components/templates";
@@ -18,7 +18,7 @@ const BODY_MAX = 220;
 const RENDER_URL =
   process.env.NEXT_PUBLIC_RENDER_URL || "https://test-design-tool.onrender.com";
 
-// Formati (puoi anche spostarli in Brand/brand.config.json in futuro)
+// Formati
 const FORMATS = [
   { key: "ig_post_1_1", group: "Instagram", name: "Instagram Post (1:1)", width: 1080, height: 1080 },
   { key: "ig_post_4_5", group: "Instagram", name: "Instagram Post (4:5)", width: 1080, height: 1350 },
@@ -65,7 +65,9 @@ export default function Page() {
   const [body, setBody] = useState("Testo corpo opzionale…");
 
   // Brand controls (puoi anche nasconderli all’utente in futuro)
-  const [paletteKey, setPaletteKey] = useState(brandConfig?.defaultPalette || paletteKeys[0] || "void");
+  const [paletteKey, setPaletteKey] = useState(
+    brandConfig?.defaultPalette || paletteKeys[0] || "void"
+  );
   const [motionKey, setMotionKey] = useState(motionKeys[0] || "void");
 
   const [mp4State, setMp4State] = useState({ loading: false, phase: "", error: "" });
@@ -112,7 +114,6 @@ export default function Page() {
     setMp4State({ loading: true, phase: "starting", error: "" });
 
     try {
-      // Payload pensato per scalare: template + content + brand keys
       const payload = {
         templateId,
         formatKey,
