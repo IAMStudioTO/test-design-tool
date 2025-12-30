@@ -14,11 +14,9 @@ const HEADLINE_MAX = 40;
 const SUBHEAD_MAX = 90;
 const BODY_MAX = 220;
 
-// Backend Render URL
 const RENDER_URL =
   process.env.NEXT_PUBLIC_RENDER_URL || "https://test-design-tool.onrender.com";
 
-// Formati
 const FORMATS = [
   { key: "ig_post_1_1", group: "Instagram", name: "Instagram Post (1:1)", width: 1080, height: 1080 },
   { key: "ig_post_4_5", group: "Instagram", name: "Instagram Post (4:5)", width: 1080, height: 1350 },
@@ -64,7 +62,6 @@ export default function Page() {
   const [subheadline, setSubheadline] = useState("Come stai?");
   const [body, setBody] = useState("Testo corpo opzionale…");
 
-  // Brand controls
   const [paletteKey, setPaletteKey] = useState(
     brandConfig?.defaultPalette || paletteKeys[0] || "void"
   );
@@ -73,25 +70,6 @@ export default function Page() {
   const [mp4State, setMp4State] = useState({ loading: false, phase: "", error: "" });
 
   const exportRef = useRef(null);
-
-  // ✅ calcolo scala preview: usa larghezza + altezza
-  const previewWrapRef = useRef(null);
-  const [previewWrapSize, setPreviewWrapSize] = useState({ w: 900, h: 800 });
-
-  useEffect(() => {
-    if (!previewWrapRef.current) return;
-
-    const el = previewWrapRef.current;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        const w = e.contentRect?.width || 900;
-        const h = e.contentRect?.height || 800;
-        setPreviewWrapSize({ w, h });
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   const selectedFormat = useMemo(() => {
     return FORMATS.find((f) => f.key === formatKey) || FORMATS[0];
@@ -105,27 +83,47 @@ export default function Page() {
     return getTemplateById(templateId)?.Component;
   }, [templateId]);
 
-  // ✅ Scale basata su spazio disponibile (W e H)
+  /**
+   * ✅ RESPONSIVE "A REGOLE"
+   * - Misuriamo lo spazio reale disponibile alla preview (container)
+   * - Calcoliamo la scala per far entrare il canvas (fit-to-container)
+   */
+  const previewWrapRef = useRef(null);
+  const [previewBox, setPreviewBox] = useState({ w: 800, h: 600 });
+
+  useEffect(() => {
+    if (!previewWrapRef.current) return;
+
+    const el = previewWrapRef.current;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const w = e.contentRect?.width || 800;
+        const h = e.contentRect?.height || 600;
+        setPreviewBox({ w, h });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const previewScale = useMemo(() => {
     const canvasW = selectedFormat.width;
     const canvasH = selectedFormat.height;
 
-    // margini interni della colonna preview
-    const padX = 40;
-    const padY = 40;
+    // “safe padding” interno della zona preview (aria attorno)
+    const innerPad = 32;
 
-    const availableW = Math.max(320, previewWrapSize.w - padX * 2);
-    const availableH = Math.max(320, previewWrapSize.h - padY * 2);
+    const availableW = Math.max(320, previewBox.w - innerPad * 2);
+    const availableH = Math.max(320, previewBox.h - innerPad * 2);
 
-    // prendi la scala minima tra width e height (così entra sempre)
+    // Fit-to-container: entra sempre e cresce quanto può
     const sW = availableW / canvasW;
     const sH = availableH / canvasH;
-
     const s = Math.min(sW, sH);
 
-    // limiti: permettiamo più grande rispetto a prima
-    return Math.min(1.25, Math.max(0.22, s));
-  }, [previewWrapSize.w, previewWrapSize.h, selectedFormat.width, selectedFormat.height]);
+    // Limiti: non vogliamo che diventi minuscolo né enorme in modo ingestibile
+    return Math.min(1.35, Math.max(0.2, s));
+  }, [previewBox.w, previewBox.h, selectedFormat.width, selectedFormat.height]);
 
   async function onExportPng() {
     if (!exportRef.current) return;
@@ -154,11 +152,7 @@ export default function Page() {
         formatKey,
         paletteKey,
         motionStyle: motionKey,
-        content: {
-          headline,
-          subheadline,
-          body,
-        },
+        content: { headline, subheadline, body },
       };
 
       const startRes = await fetch(`${RENDER_URL}/render/mp4/start`, {
@@ -208,55 +202,42 @@ export default function Page() {
 
   return (
     <>
-      <main style={{ maxWidth: 2200, margin: "0 auto", padding: 24 }}>
-        <div
-          style={{
-            display: "grid",
-            // ✅ pannello molto più grande su desktop
-            gridTemplateColumns: "clamp(420px, 38vw, 720px) minmax(520px, 1fr)",
-            gap: 24,
-            alignItems: "start",
-          }}
-        >
-          <ControlPanel
-            templates={TEMPLATE_LIST}
-            templateId={templateId}
-            setTemplateId={setTemplateId}
-            headline={headline}
-            setHeadline={(v) => setHeadline(v.slice(0, HEADLINE_MAX))}
-            subheadline={subheadline}
-            setSubheadline={(v) => setSubheadline(v.slice(0, SUBHEAD_MAX))}
-            body={body}
-            setBody={(v) => setBody(v.slice(0, BODY_MAX))}
-            paletteKeys={paletteKeys}
-            paletteKey={paletteKey}
-            setPaletteKey={setPaletteKey}
-            motionKeys={motionKeys}
-            motionKey={motionKey}
-            setMotionKey={setMotionKey}
-            formatsByGroup={formatsByGroup}
-            formatKey={formatKey}
-            setFormatKey={setFormatKey}
-            selectedFormat={selectedFormat}
-            onExportPng={onExportPng}
-            onExportMp4={onExportMp4}
-            mp4State={mp4State}
-            renderUrl={RENDER_URL}
-          />
+      <main className="layoutRoot">
+        <div className="layoutGrid">
+          <div className="leftCol">
+            <ControlPanel
+              templates={TEMPLATE_LIST}
+              templateId={templateId}
+              setTemplateId={setTemplateId}
+              headline={headline}
+              setHeadline={(v) => setHeadline(v.slice(0, HEADLINE_MAX))}
+              subheadline={subheadline}
+              setSubheadline={(v) => setSubheadline(v.slice(0, SUBHEAD_MAX))}
+              body={body}
+              setBody={(v) => setBody(v.slice(0, BODY_MAX))}
+              paletteKeys={paletteKeys}
+              paletteKey={paletteKey}
+              setPaletteKey={setPaletteKey}
+              motionKeys={motionKeys}
+              motionKey={motionKey}
+              setMotionKey={setMotionKey}
+              formatsByGroup={formatsByGroup}
+              formatKey={formatKey}
+              setFormatKey={setFormatKey}
+              selectedFormat={selectedFormat}
+              onExportPng={onExportPng}
+              onExportMp4={onExportMp4}
+              mp4State={mp4State}
+              renderUrl={RENDER_URL}
+            />
+          </div>
 
-          {/* RIGHT PREVIEW */}
-          <section
-            ref={previewWrapRef}
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              height: "calc(100vh - 48px)", // ✅ ora abbiamo una “vera” altezza per scalare
-              paddingTop: 8,
-              overflow: "hidden",
-            }}
-          >
-            <div style={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
-              <div style={{ transform: `scale(${previewScale})`, transformOrigin: "top center" }}>
+          <section ref={previewWrapRef} className="rightCol">
+            <div className="previewCenter">
+              <div
+                className="previewScaled"
+                style={{ transform: `scale(${previewScale})` }}
+              >
                 {SelectedTemplate ? (
                   <SelectedTemplate
                     width={selectedFormat.width}
@@ -300,13 +281,62 @@ export default function Page() {
       </main>
 
       <style>{`
-        @media (max-width: 1120px) {
-          main > div {
-            grid-template-columns: 1fr !important;
+        /* ✅ Design tokens (ragionamento, non tentativi) */
+        .layoutRoot {
+          /* usa quasi tutto lo schermo ma evita righe lunghissime */
+          max-width: 2200px;
+          margin: 0 auto;
+          padding: 24px;
+        }
+
+        .layoutGrid {
+          display: grid;
+          gap: 24px;
+
+          /* ✅ Colonna sinistra: min usabile, max ragionevole, cresce col viewport */
+          grid-template-columns: clamp(360px, 34vw, 720px) minmax(520px, 1fr);
+          align-items: start;
+        }
+
+        .leftCol {
+          position: sticky;
+          top: 16px;
+          align-self: start;
+        }
+
+        .rightCol {
+          /* ✅ Altezza reale: così la preview può fare fit anche in verticale */
+          height: calc(100svh - 48px);
+          overflow: hidden;
+          display: flex;
+        }
+
+        .previewCenter {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          padding-top: 8px;
+        }
+
+        .previewScaled {
+          transform-origin: top center;
+          will-change: transform;
+        }
+
+        /* ✅ Breakpoint "di struttura": quando sotto ~1100px si va in colonna */
+        @media (max-width: 1100px) {
+          .layoutGrid {
+            grid-template-columns: 1fr;
           }
-          section[style*="position: sticky"] {
-            position: relative !important;
-            top: auto !important;
+          .leftCol {
+            position: relative;
+            top: auto;
+          }
+          .rightCol {
+            height: auto;
+            min-height: 60svh;
           }
         }
       `}</style>
