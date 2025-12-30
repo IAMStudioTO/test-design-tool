@@ -3,42 +3,41 @@
 import { useMemo, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 
-import brandColors from "../../Brand/colors.json";
-import brandFonts from "../../Brand/fonts.json";
-import brandMotion from "../../Brand/motion.json";
-import brandConfig from "../../Brand/brand.config.json";
+import brandColors from "../Brand/colors.json";
+import brandConfig from "../Brand/brand.config.json";
+import brandMotion from "../Brand/motion.json";
+
+import ControlPanel from "./components/ControlPanel";
+import { TEMPLATE_LIST, getTemplateById } from "./components/templates";
 
 const HEADLINE_MAX = 40;
-const SUBHEADLINE_MAX = 90;
+const SUBHEAD_MAX = 90;
+const BODY_MAX = 220;
 
 // Backend Render URL
 const RENDER_URL =
   process.env.NEXT_PUBLIC_RENDER_URL || "https://test-design-tool.onrender.com";
 
-// Formati
+// Formati (puoi anche spostarli in Brand/brand.config.json in futuro)
 const FORMATS = [
   { key: "ig_post_1_1", group: "Instagram", name: "Instagram Post (1:1)", width: 1080, height: 1080 },
   { key: "ig_post_4_5", group: "Instagram", name: "Instagram Post (4:5)", width: 1080, height: 1350 },
   { key: "ig_story_9_16", group: "Instagram", name: "Instagram Story (9:16)", width: 1080, height: 1920 },
-
   { key: "reel_9_16", group: "Video", name: "Reel / TikTok (9:16)", width: 1080, height: 1920 },
   { key: "yt_short_9_16", group: "Video", name: "YouTube Short (9:16)", width: 1080, height: 1920 },
-
   { key: "li_square", group: "LinkedIn", name: "LinkedIn Square (1:1)", width: 1080, height: 1080 },
   { key: "li_landscape", group: "LinkedIn", name: "LinkedIn Landscape (1.91:1)", width: 1200, height: 628 },
   { key: "li_banner", group: "LinkedIn", name: "LinkedIn Profile Banner", width: 1128, height: 191 },
-
   { key: "x_post", group: "X / Twitter", name: "X Post (16:9)", width: 1200, height: 675 },
 ];
 
-// Safe area semplice
-function getSafeArea(formatKey, w, h) {
-  if (formatKey.includes("9_16")) {
-    const padX = Math.round(w * 0.06);
-    const padY = Math.round(h * 0.08);
-    return { x: padX, y: padY, w: w - padX * 2, h: h - padY * 2 };
+function groupedFormats() {
+  const groups = {};
+  for (const f of FORMATS) {
+    if (!groups[f.group]) groups[f.group] = [];
+    groups[f.group].push(f);
   }
-  return null;
+  return groups;
 }
 
 function downloadBlob(blob, filename) {
@@ -52,150 +51,25 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function groupedFormats() {
-  const groups = {};
-  for (const f of FORMATS) {
-    if (!groups[f.group]) groups[f.group] = [];
-    groups[f.group].push(f);
-  }
-  return groups;
-}
-
-function paletteOptionsFromBrandColors(colorsObj) {
-  const keys = Object.keys(colorsObj || {});
-  return keys.map((k) => {
-    const v = colorsObj[k] || {};
-    return { key: k, label: v.name || k };
-  });
-}
-
-function motionOptionsFromBrandMotion(motionObj) {
-  const keys = Object.keys(motionObj || {});
-  return keys.map((k) => ({ key: k, label: motionObj[k]?.name || k }));
-}
-
-function TemplateCanvas({
-  width,
-  height,
-  palette,
-  headline,
-  subheadline,
-  showSafeAreaOverlay,
-  formatKey,
-}) {
-  const safe = getSafeArea(formatKey, width, height);
-
-  // ✅ Font styles dal Brand
-  const headlineFontStyle = {
-    fontFamily: `"${brandFonts?.headline?.family || "OMNI Display"}", system-ui, -apple-system, sans-serif`,
-    fontWeight: brandFonts?.headline?.weight ?? 600,
-    letterSpacing: `${brandFonts?.headline?.letterSpacing ?? 0}px`,
-  };
-
-  const subheadlineFontStyle = {
-    fontFamily: `"${brandFonts?.subheadline?.family || "OMNI Mono"}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
-    fontWeight: brandFonts?.subheadline?.weight ?? 400,
-    letterSpacing: `${brandFonts?.subheadline?.letterSpacing ?? 0}px`,
-  };
-
-  return (
-    <div
-      style={{
-        width,
-        height,
-        overflow: "hidden",
-        borderRadius: 0,
-        boxShadow: "none",
-        background: palette?.background || "#0b0f19",
-        color: palette?.headline || "#ffffff",
-        position: "relative",
-      }}
-    >
-      <div style={{ padding: 48 }}>
-        <div style={{ fontSize: 14, opacity: 0.65, color: palette?.meta || "#9ca3af" }}>
-          {brandConfig?.templateLabel || "TEMPLATE 01"}
-        </div>
-
-        <h1
-          style={{
-            ...headlineFontStyle,
-            margin: "140px 0 0 0",
-            fontSize: Math.round(width * 0.07),
-            lineHeight: 1.04,
-          }}
-        >
-          {headline}
-        </h1>
-
-        <p
-          style={{
-            ...subheadlineFontStyle,
-            margin: "18px 0 0 0",
-            fontSize: Math.round(width * 0.024),
-            lineHeight: 1.25,
-            color: palette?.subheadline || "rgba(255,255,255,0.9)",
-          }}
-        >
-          {subheadline}
-        </p>
-
-        {/* ✅ FOOTER: LOGO */}
-        <div
-          style={{
-            position: "absolute",
-            left: 48,
-            bottom: 40,
-            opacity: 0.6,
-          }}
-        >
-          <img
-            src="/brand/logo.svg"
-            alt="Brand logo"
-            style={{
-              height: 14,
-              width: "auto",
-              display: "block",
-            }}
-          />
-        </div>
-      </div>
-
-      {showSafeAreaOverlay && safe ? (
-        <div
-          style={{
-            position: "absolute",
-            left: safe.x,
-            top: safe.y,
-            width: safe.w,
-            height: safe.h,
-            border: "2px dashed rgba(255,255,255,0.35)",
-            borderRadius: 12,
-            pointerEvents: "none",
-          }}
-        />
-      ) : null}
-    </div>
-  );
-}
-
 export default function Page() {
   const formatsByGroup = useMemo(() => groupedFormats(), []);
-  const paletteOptions = useMemo(() => paletteOptionsFromBrandColors(brandColors), []);
-  const motionOptions = useMemo(() => motionOptionsFromBrandMotion(brandMotion), []);
+  const paletteKeys = useMemo(() => Object.keys(brandColors || {}), []);
+  const motionKeys = useMemo(() => Object.keys(brandMotion || {}), []);
 
-  const defaultPaletteKey = brandConfig?.defaultPalette || paletteOptions[0]?.key || "void";
-  const defaultMotionKey = motionOptions[0]?.key || "void";
+  const [templateId, setTemplateId] = useState(TEMPLATE_LIST[0]?.id || "template-01");
+  const [formatKey, setFormatKey] = useState(FORMATS[0].key);
 
+  // ✅ SOLO questi 3 sono editabili dall’utente
   const [headline, setHeadline] = useState("Ciao");
   const [subheadline, setSubheadline] = useState("Come stai?");
-  const [paletteKey, setPaletteKey] = useState(defaultPaletteKey);
-  const [formatKey, setFormatKey] = useState(FORMATS[0].key);
-  const [showSafeArea, setShowSafeArea] = useState(false);
-  const [motionKey, setMotionKey] = useState(defaultMotionKey);
+  const [body, setBody] = useState("Testo corpo opzionale…");
+
+  // Brand controls (puoi anche nasconderli all’utente in futuro)
+  const [paletteKey, setPaletteKey] = useState(brandConfig?.defaultPalette || paletteKeys[0] || "void");
+  const [motionKey, setMotionKey] = useState(motionKeys[0] || "void");
 
   const [mp4State, setMp4State] = useState({ loading: false, phase: "", error: "" });
 
-  // ✅ Ref per EXPORT (nascosto)
   const exportRef = useRef(null);
 
   const selectedFormat = useMemo(() => {
@@ -206,16 +80,17 @@ export default function Page() {
     return brandColors?.[paletteKey] || {};
   }, [paletteKey]);
 
-  // ✅ Preview scale: usa lo spazio disponibile in modo più “pieno”
+  const SelectedTemplate = useMemo(() => {
+    return getTemplateById(templateId)?.Component;
+  }, [templateId]);
+
   const previewScale = useMemo(() => {
-    // su schermi grandi, vogliamo la preview più grossa
-    const maxPreviewWidth = 980; // ↑ aumentato (prima 700)
+    const maxPreviewWidth = 980;
     const s = maxPreviewWidth / selectedFormat.width;
     return Math.min(1, Math.max(0.25, s));
   }, [selectedFormat.width]);
 
   async function onExportPng() {
-    setMp4State((s) => ({ ...s, error: "" }));
     if (!exportRef.current) return;
 
     const dataUrl = await toPng(exportRef.current, {
@@ -227,7 +102,7 @@ export default function Page() {
 
     const a = document.createElement("a");
     a.href = dataUrl;
-    a.download = `${brandConfig?.id || "brand"}_${formatKey}_${selectedFormat.width}x${selectedFormat.height}.png`;
+    a.download = `${brandConfig?.id || "brand"}_${templateId}_${formatKey}_${selectedFormat.width}x${selectedFormat.height}.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -237,12 +112,17 @@ export default function Page() {
     setMp4State({ loading: true, phase: "starting", error: "" });
 
     try {
+      // Payload pensato per scalare: template + content + brand keys
       const payload = {
-        headline,
-        subheadline,
+        templateId,
+        formatKey,
         paletteKey,
         motionStyle: motionKey,
-        formatKey,
+        content: {
+          headline,
+          subheadline,
+          body,
+        },
       };
 
       const startRes = await fetch(`${RENDER_URL}/render/mp4/start`, {
@@ -282,7 +162,7 @@ export default function Page() {
       if (!fileRes.ok) throw new Error(`Download failed (${fileRes.status})`);
 
       const blob = await fileRes.blob();
-      downloadBlob(blob, `${brandConfig?.id || "brand"}_${formatKey}.mp4`);
+      downloadBlob(blob, `${brandConfig?.id || "brand"}_${templateId}_${formatKey}.mp4`);
 
       setMp4State({ loading: false, phase: "", error: "" });
     } catch (e) {
@@ -292,14 +172,7 @@ export default function Page() {
 
   return (
     <>
-      {/* ✅ Layout responsive: center + maxWidth + grid che riempie */}
-      <main
-        style={{
-          maxWidth: 1400,
-          margin: "0 auto",
-          padding: 24,
-        }}
-      >
+      <main style={{ maxWidth: 1400, margin: "0 auto", padding: 24 }}>
         <div
           style={{
             display: "grid",
@@ -308,167 +181,32 @@ export default function Page() {
             alignItems: "start",
           }}
         >
-          {/* LEFT PANEL */}
-          <section
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: 16,
-              padding: 16,
-              background: "#fff",
-              position: "sticky",
-              top: 16,
-              alignSelf: "start",
-            }}
-          >
-            <h2 style={{ marginTop: 0, marginBottom: 16 }}>Contenuti</h2>
+          <ControlPanel
+            templates={TEMPLATE_LIST}
+            templateId={templateId}
+            setTemplateId={setTemplateId}
+            headline={headline}
+            setHeadline={(v) => setHeadline(v.slice(0, HEADLINE_MAX))}
+            subheadline={subheadline}
+            setSubheadline={(v) => setSubheadline(v.slice(0, SUBHEAD_MAX))}
+            body={body}
+            setBody={(v) => setBody(v.slice(0, BODY_MAX))}
+            paletteKeys={paletteKeys}
+            paletteKey={paletteKey}
+            setPaletteKey={setPaletteKey}
+            motionKeys={motionKeys}
+            motionKey={motionKey}
+            setMotionKey={setMotionKey}
+            formatsByGroup={formatsByGroup}
+            formatKey={formatKey}
+            setFormatKey={setFormatKey}
+            selectedFormat={selectedFormat}
+            onExportPng={onExportPng}
+            onExportMp4={onExportMp4}
+            mp4State={mp4State}
+            renderUrl={RENDER_URL}
+          />
 
-            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Headline</label>
-            <input
-              value={headline}
-              onChange={(e) => setHeadline(e.target.value.slice(0, HEADLINE_MAX))}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-              }}
-            />
-            <div style={{ fontSize: 12, opacity: 0.6, marginTop: 6, marginBottom: 14 }}>
-              {headline.length}/{HEADLINE_MAX} caratteri
-            </div>
-
-            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Subheadline</label>
-            <textarea
-              value={subheadline}
-              onChange={(e) => setSubheadline(e.target.value.slice(0, SUBHEADLINE_MAX))}
-              rows={3}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-              }}
-            />
-            <div style={{ fontSize: 12, opacity: 0.6, marginTop: 6, marginBottom: 14 }}>
-              {subheadline.length}/{SUBHEADLINE_MAX} caratteri
-            </div>
-
-            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Palette colore</label>
-            <select
-              value={paletteKey}
-              onChange={(e) => setPaletteKey(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-                marginBottom: 14,
-              }}
-            >
-              {paletteOptions.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-
-            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Destinazione</label>
-            <select
-              value={formatKey}
-              onChange={(e) => setFormatKey(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-                marginBottom: 10,
-              }}
-            >
-              {Object.entries(formatsByGroup).map(([group, items]) => (
-                <optgroup key={group} label={group}>
-                  {items.map((f) => (
-                    <option key={f.key} value={f.key}>
-                      {f.name} — {f.width}×{f.height}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-
-            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Motion preset</label>
-            <select
-              value={motionKey}
-              onChange={(e) => setMotionKey(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-                marginBottom: 10,
-              }}
-            >
-              {motionOptions.map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-
-            <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <input
-                type="checkbox"
-                checked={showSafeArea}
-                onChange={(e) => setShowSafeArea(e.target.checked)}
-              />
-              Mostra safe area
-            </label>
-
-            <button
-              onClick={onExportPng}
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #111827",
-                background: "#111827",
-                color: "#fff",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Esporta PNG ({selectedFormat.width}×{selectedFormat.height})
-            </button>
-
-            <button
-              onClick={onExportMp4}
-              disabled={mp4State.loading}
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #111827",
-                background: "#fff",
-                color: "#111827",
-                fontWeight: 700,
-                cursor: mp4State.loading ? "not-allowed" : "pointer",
-                marginTop: 10,
-              }}
-            >
-              {mp4State.loading ? `Export MP4… (${mp4State.phase || "..."})` : "Esporta MP4"}
-            </button>
-
-            {mp4State.error ? (
-              <div style={{ marginTop: 12, color: "#b91c1c", fontSize: 13 }}>
-                Errore export MP4: {mp4State.error}
-              </div>
-            ) : null}
-
-            <div style={{ marginTop: 14, fontSize: 12, opacity: 0.6 }}>
-              Backend: {RENDER_URL}
-            </div>
-          </section>
-
-          {/* RIGHT PREVIEW */}
           <section
             style={{
               display: "flex",
@@ -479,15 +217,21 @@ export default function Page() {
           >
             <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
               <div style={{ transform: `scale(${previewScale})`, transformOrigin: "top center" }}>
-                <TemplateCanvas
-                  width={selectedFormat.width}
-                  height={selectedFormat.height}
-                  palette={palette}
-                  headline={headline}
-                  subheadline={subheadline}
-                  showSafeAreaOverlay={showSafeArea}
-                  formatKey={formatKey}
-                />
+                {SelectedTemplate ? (
+                  <SelectedTemplate
+                    width={selectedFormat.width}
+                    height={selectedFormat.height}
+                    palette={palette}
+                    content={{ headline, subheadline, body }}
+                    brand={{
+                      id: brandConfig?.id || "brand",
+                      templateLabel: brandConfig?.templateLabel || "TEMPLATE",
+                      footerLogoSrc: "/brand/logo.svg",
+                    }}
+                    formatKey={formatKey}
+                    motionStyle={motionKey}
+                  />
+                ) : null}
               </div>
             </div>
           </section>
@@ -496,20 +240,25 @@ export default function Page() {
         {/* EXPORT CANVAS HIDDEN */}
         <div style={{ position: "absolute", left: -99999, top: 0 }}>
           <div ref={exportRef}>
-            <TemplateCanvas
-              width={selectedFormat.width}
-              height={selectedFormat.height}
-              palette={palette}
-              headline={headline}
-              subheadline={subheadline}
-              showSafeAreaOverlay={false}
-              formatKey={formatKey}
-            />
+            {SelectedTemplate ? (
+              <SelectedTemplate
+                width={selectedFormat.width}
+                height={selectedFormat.height}
+                palette={palette}
+                content={{ headline, subheadline, body }}
+                brand={{
+                  id: brandConfig?.id || "brand",
+                  templateLabel: brandConfig?.templateLabel || "TEMPLATE",
+                  footerLogoSrc: "/brand/logo.svg",
+                }}
+                formatKey={formatKey}
+                motionStyle={motionKey}
+              />
+            ) : null}
           </div>
         </div>
       </main>
 
-      {/* ✅ media query “inline” via style tag: su mobile va in colonna */}
       <style>{`
         @media (max-width: 980px) {
           main > div {
