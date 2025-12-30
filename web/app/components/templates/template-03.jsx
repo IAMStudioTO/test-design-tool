@@ -1,4 +1,4 @@
-import brandFonts from "../../../Brand/fonts.json";
+import brandFonts from "../../../../Brand/fonts.json";
 
 export default function Template03({ width, height, palette, content, brand }) {
   const H = {
@@ -14,7 +14,6 @@ export default function Template03({ width, height, palette, content, brand }) {
 
   return (
     <div style={{ width, height, background: palette?.background || "#0b0f19", color: palette?.headline || "#fff", position: "relative", overflow: "hidden" }}>
-      {/* box centrale */}
       <div
         style={{
           position: "absolute",
