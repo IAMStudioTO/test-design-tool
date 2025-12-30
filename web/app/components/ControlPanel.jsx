@@ -12,6 +12,11 @@ export default function ControlPanel({
   body,
   setBody,
 
+  // ✅ Palette (selettore colore)
+  paletteKeys,
+  paletteKey,
+  setPaletteKey,
+
   onExportPng,
   onExportMp4,
   mp4State,
@@ -26,14 +31,7 @@ export default function ControlPanel({
         boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
       }}
     >
-      {/* TITLE */}
-      <h2
-        style={{
-          margin: "0 0 24px 0",
-          fontSize: 20,
-          fontWeight: 600,
-        }}
-      >
+      <h2 style={{ margin: "0 0 24px 0", fontSize: 20, fontWeight: 600 }}>
         Contenuti
       </h2>
 
@@ -47,6 +45,20 @@ export default function ControlPanel({
         {templates.map((t) => (
           <option key={t.id} value={t.id}>
             {t.label}
+          </option>
+        ))}
+      </select>
+
+      {/* ✅ COLORE (PALETTE) */}
+      <label style={labelStyle}>Colore</label>
+      <select
+        value={paletteKey}
+        onChange={(e) => setPaletteKey(e.target.value)}
+        style={inputStyle}
+      >
+        {paletteKeys.map((k) => (
+          <option key={k} value={k}>
+            {k}
           </option>
         ))}
       </select>
@@ -109,7 +121,7 @@ export default function ControlPanel({
 }
 
 /* =======================
-   STYLES (UX-oriented)
+   STYLES
    ======================= */
 
 const labelStyle = {
