@@ -85,7 +85,7 @@ function TemplateCanvas({
 }) {
   const safe = getSafeArea(formatKey, width, height);
 
-  // Font styles dal Brand
+  // ✅ Font styles dal Brand
   const headlineFontStyle = {
     fontFamily: `"${brandFonts?.headline?.family || "OMNI Display"}", system-ui, -apple-system, sans-serif`,
     fontWeight: brandFonts?.headline?.weight ?? 600,
@@ -139,7 +139,7 @@ function TemplateCanvas({
           {subheadline}
         </p>
 
-        {/* ✅ FOOTER: LOGO (da web/public/brand/logo.svg) */}
+        {/* ✅ FOOTER: LOGO */}
         <div
           style={{
             position: "absolute",
@@ -195,7 +195,7 @@ export default function Page() {
 
   const [mp4State, setMp4State] = useState({ loading: false, phase: "", error: "" });
 
-  // Ref per EXPORT 1:1 (nascosto)
+  // ✅ Ref per EXPORT (nascosto)
   const exportRef = useRef(null);
 
   const selectedFormat = useMemo(() => {
@@ -206,9 +206,10 @@ export default function Page() {
     return brandColors?.[paletteKey] || {};
   }, [paletteKey]);
 
-  // Preview: scala automaticamente per stare sullo schermo
+  // ✅ Preview scale: usa lo spazio disponibile in modo più “pieno”
   const previewScale = useMemo(() => {
-    const maxPreviewWidth = 700;
+    // su schermi grandi, vogliamo la preview più grossa
+    const maxPreviewWidth = 980; // ↑ aumentato (prima 700)
     const s = maxPreviewWidth / selectedFormat.width;
     return Math.min(1, Math.max(0.25, s));
   }, [selectedFormat.width]);
@@ -290,203 +291,232 @@ export default function Page() {
   }
 
   return (
-    <main
-      style={{
-        display: "grid",
-        gridTemplateColumns: "420px 1fr",
-        gap: 24,
-        padding: 24,
-        alignItems: "start",
-      }}
-    >
-      {/* LEFT PANEL */}
-      <section
+    <>
+      {/* ✅ Layout responsive: center + maxWidth + grid che riempie */}
+      <main
         style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 16,
-          padding: 16,
-          background: "#fff",
+          maxWidth: 1400,
+          margin: "0 auto",
+          padding: 24,
         }}
       >
-        <h2 style={{ marginTop: 0, marginBottom: 16 }}>Contenuti</h2>
-
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Headline</label>
-        <input
-          value={headline}
-          onChange={(e) => setHeadline(e.target.value.slice(0, HEADLINE_MAX))}
+        <div
           style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 10,
-            border: "1px solid #d1d5db",
-          }}
-        />
-        <div style={{ fontSize: 12, opacity: 0.6, marginTop: 6, marginBottom: 14 }}>
-          {headline.length}/{HEADLINE_MAX} caratteri
-        </div>
-
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Subheadline</label>
-        <textarea
-          value={subheadline}
-          onChange={(e) => setSubheadline(e.target.value.slice(0, SUBHEADLINE_MAX))}
-          rows={3}
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 10,
-            border: "1px solid #d1d5db",
-          }}
-        />
-        <div style={{ fontSize: 12, opacity: 0.6, marginTop: 6, marginBottom: 14 }}>
-          {subheadline.length}/{SUBHEADLINE_MAX} caratteri
-        </div>
-
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Palette colore</label>
-        <select
-          value={paletteKey}
-          onChange={(e) => setPaletteKey(e.target.value)}
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 10,
-            border: "1px solid #d1d5db",
-            marginBottom: 14,
+            display: "grid",
+            gridTemplateColumns: "420px minmax(520px, 1fr)",
+            gap: 24,
+            alignItems: "start",
           }}
         >
-          {paletteOptions.map((p) => (
-            <option key={p.key} value={p.key}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+          {/* LEFT PANEL */}
+          <section
+            style={{
+              border: "1px solid #e5e7eb",
+              borderRadius: 16,
+              padding: 16,
+              background: "#fff",
+              position: "sticky",
+              top: 16,
+              alignSelf: "start",
+            }}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: 16 }}>Contenuti</h2>
 
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Destinazione</label>
-        <select
-          value={formatKey}
-          onChange={(e) => setFormatKey(e.target.value)}
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 10,
-            border: "1px solid #d1d5db",
-            marginBottom: 10,
-          }}
-        >
-          {Object.entries(formatsByGroup).map(([group, items]) => (
-            <optgroup key={group} label={group}>
-              {items.map((f) => (
-                <option key={f.key} value={f.key}>
-                  {f.name} — {f.width}×{f.height}
+            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Headline</label>
+            <input
+              value={headline}
+              onChange={(e) => setHeadline(e.target.value.slice(0, HEADLINE_MAX))}
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+              }}
+            />
+            <div style={{ fontSize: 12, opacity: 0.6, marginTop: 6, marginBottom: 14 }}>
+              {headline.length}/{HEADLINE_MAX} caratteri
+            </div>
+
+            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Subheadline</label>
+            <textarea
+              value={subheadline}
+              onChange={(e) => setSubheadline(e.target.value.slice(0, SUBHEADLINE_MAX))}
+              rows={3}
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+              }}
+            />
+            <div style={{ fontSize: 12, opacity: 0.6, marginTop: 6, marginBottom: 14 }}>
+              {subheadline.length}/{SUBHEADLINE_MAX} caratteri
+            </div>
+
+            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Palette colore</label>
+            <select
+              value={paletteKey}
+              onChange={(e) => setPaletteKey(e.target.value)}
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+                marginBottom: 14,
+              }}
+            >
+              {paletteOptions.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
                 </option>
               ))}
-            </optgroup>
-          ))}
-        </select>
+            </select>
 
-        <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Motion preset</label>
-        <select
-          value={motionKey}
-          onChange={(e) => setMotionKey(e.target.value)}
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 10,
-            border: "1px solid #d1d5db",
-            marginBottom: 10,
-          }}
-        >
-          {motionOptions.map((m) => (
-            <option key={m.key} value={m.key}>
-              {m.label}
-            </option>
-          ))}
-        </select>
+            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Destinazione</label>
+            <select
+              value={formatKey}
+              onChange={(e) => setFormatKey(e.target.value)}
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+                marginBottom: 10,
+              }}
+            >
+              {Object.entries(formatsByGroup).map(([group, items]) => (
+                <optgroup key={group} label={group}>
+                  {items.map((f) => (
+                    <option key={f.key} value={f.key}>
+                      {f.name} — {f.width}×{f.height}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <input
-            type="checkbox"
-            checked={showSafeArea}
-            onChange={(e) => setShowSafeArea(e.target.checked)}
-          />
-          Mostra safe area
-        </label>
+            <label style={{ display: "block", fontSize: 12, marginBottom: 6 }}>Motion preset</label>
+            <select
+              value={motionKey}
+              onChange={(e) => setMotionKey(e.target.value)}
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+                marginBottom: 10,
+              }}
+            >
+              {motionOptions.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
 
-        <button
-          onClick={onExportPng}
-          style={{
-            width: "100%",
-            padding: 12,
-            borderRadius: 12,
-            border: "1px solid #111827",
-            background: "#111827",
-            color: "#fff",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          Esporta PNG ({selectedFormat.width}×{selectedFormat.height})
-        </button>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <input
+                type="checkbox"
+                checked={showSafeArea}
+                onChange={(e) => setShowSafeArea(e.target.checked)}
+              />
+              Mostra safe area
+            </label>
 
-        <button
-          onClick={onExportMp4}
-          disabled={mp4State.loading}
-          style={{
-            width: "100%",
-            padding: 12,
-            borderRadius: 12,
-            border: "1px solid #111827",
-            background: "#fff",
-            color: "#111827",
-            fontWeight: 700,
-            cursor: mp4State.loading ? "not-allowed" : "pointer",
-            marginTop: 10,
-          }}
-        >
-          {mp4State.loading ? `Export MP4… (${mp4State.phase || "..."})` : "Esporta MP4"}
-        </button>
+            <button
+              onClick={onExportPng}
+              style={{
+                width: "100%",
+                padding: 12,
+                borderRadius: 12,
+                border: "1px solid #111827",
+                background: "#111827",
+                color: "#fff",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Esporta PNG ({selectedFormat.width}×{selectedFormat.height})
+            </button>
 
-        {mp4State.error ? (
-          <div style={{ marginTop: 12, color: "#b91c1c", fontSize: 13 }}>
-            Errore export MP4: {mp4State.error}
-          </div>
-        ) : null}
+            <button
+              onClick={onExportMp4}
+              disabled={mp4State.loading}
+              style={{
+                width: "100%",
+                padding: 12,
+                borderRadius: 12,
+                border: "1px solid #111827",
+                background: "#fff",
+                color: "#111827",
+                fontWeight: 700,
+                cursor: mp4State.loading ? "not-allowed" : "pointer",
+                marginTop: 10,
+              }}
+            >
+              {mp4State.loading ? `Export MP4… (${mp4State.phase || "..."})` : "Esporta MP4"}
+            </button>
 
-        <div style={{ marginTop: 14, fontSize: 12, opacity: 0.6 }}>
-          Backend: {RENDER_URL}
+            {mp4State.error ? (
+              <div style={{ marginTop: 12, color: "#b91c1c", fontSize: 13 }}>
+                Errore export MP4: {mp4State.error}
+              </div>
+            ) : null}
+
+            <div style={{ marginTop: 14, fontSize: 12, opacity: 0.6 }}>
+              Backend: {RENDER_URL}
+            </div>
+          </section>
+
+          {/* RIGHT PREVIEW */}
+          <section
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              minHeight: "calc(100vh - 48px)",
+              paddingTop: 8,
+            }}
+          >
+            <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+              <div style={{ transform: `scale(${previewScale})`, transformOrigin: "top center" }}>
+                <TemplateCanvas
+                  width={selectedFormat.width}
+                  height={selectedFormat.height}
+                  palette={palette}
+                  headline={headline}
+                  subheadline={subheadline}
+                  showSafeAreaOverlay={showSafeArea}
+                  formatKey={formatKey}
+                />
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
 
-      {/* RIGHT PREVIEW */}
-      <section style={{ display: "flex", justifyContent: "center" }}>
-        <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
-          <div style={{ transform: `scale(${previewScale})`, transformOrigin: "top center" }}>
+        {/* EXPORT CANVAS HIDDEN */}
+        <div style={{ position: "absolute", left: -99999, top: 0 }}>
+          <div ref={exportRef}>
             <TemplateCanvas
               width={selectedFormat.width}
               height={selectedFormat.height}
               palette={palette}
               headline={headline}
               subheadline={subheadline}
-              showSafeAreaOverlay={showSafeArea}
+              showSafeAreaOverlay={false}
               formatKey={formatKey}
             />
           </div>
         </div>
-      </section>
+      </main>
 
-      {/* EXPORT CANVAS HIDDEN (dimensioni reali) */}
-      <div style={{ position: "absolute", left: -99999, top: 0 }}>
-        <div ref={exportRef}>
-          <TemplateCanvas
-            width={selectedFormat.width}
-            height={selectedFormat.height}
-            palette={palette}
-            headline={headline}
-            subheadline={subheadline}
-            showSafeAreaOverlay={false}
-            formatKey={formatKey}
-          />
-        </div>
-      </div>
-    </main>
+      {/* ✅ media query “inline” via style tag: su mobile va in colonna */}
+      <style>{`
+        @media (max-width: 980px) {
+          main > div {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+    </>
   );
 }
