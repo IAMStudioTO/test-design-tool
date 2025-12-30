@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 
 import brandColors from "../../Brand/colors.json";
@@ -74,6 +74,24 @@ export default function Page() {
 
   const exportRef = useRef(null);
 
+  // ✅ Per calcolare la scala reale della preview in base allo spazio disponibile
+  const previewWrapRef = useRef(null);
+  const [previewWrapWidth, setPreviewWrapWidth] = useState(900);
+
+  useEffect(() => {
+    if (!previewWrapRef.current) return;
+
+    const el = previewWrapRef.current;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const w = e.contentRect?.width || 900;
+        setPreviewWrapWidth(w);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const selectedFormat = useMemo(() => {
     return FORMATS.find((f) => f.key === formatKey) || FORMATS[0];
   }, [formatKey]);
@@ -86,11 +104,19 @@ export default function Page() {
     return getTemplateById(templateId)?.Component;
   }, [templateId]);
 
+  // ✅ Scala: in base alla larghezza disponibile, così su schermi larghi cresce davvero
   const previewScale = useMemo(() => {
-    const maxPreviewWidth = 980;
-    const s = maxPreviewWidth / selectedFormat.width;
-    return Math.min(1, Math.max(0.25, s));
-  }, [selectedFormat.width]);
+    const canvasW = selectedFormat.width;
+
+    // spazio utile: lascia un margine “aria” attorno al canvas
+    const padding = 24;
+    const available = Math.max(320, previewWrapWidth - padding * 2);
+
+    const s = available / canvasW;
+
+    // limiti ragionevoli
+    return Math.min(1, Math.max(0.22, s));
+  }, [previewWrapWidth, selectedFormat.width]);
 
   async function onExportPng() {
     if (!exportRef.current) return;
@@ -173,11 +199,12 @@ export default function Page() {
 
   return (
     <>
-      <main style={{ maxWidth: 1400, margin: "0 auto", padding: 24 }}>
+      <main style={{ maxWidth: 1800, margin: "0 auto", padding: 24 }}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "420px minmax(520px, 1fr)",
+            // ✅ sinistra più grande su schermi larghi, senza esplodere
+            gridTemplateColumns: "clamp(380px, 32vw, 560px) minmax(520px, 1fr)",
             gap: 24,
             alignItems: "start",
           }}
@@ -208,12 +235,15 @@ export default function Page() {
             renderUrl={RENDER_URL}
           />
 
+          {/* RIGHT PREVIEW */}
           <section
+            ref={previewWrapRef}
             style={{
               display: "flex",
               justifyContent: "center",
               minHeight: "calc(100vh - 48px)",
               paddingTop: 8,
+              overflow: "hidden",
             }}
           >
             <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
@@ -260,10 +290,15 @@ export default function Page() {
         </div>
       </main>
 
+      {/* ✅ responsive vero: su schermi piccoli va in colonna e il pannello non resta “sticky” */}
       <style>{`
-        @media (max-width: 980px) {
+        @media (max-width: 1040px) {
           main > div {
             grid-template-columns: 1fr !important;
+          }
+          section[style*="position: sticky"] {
+            position: relative !important;
+            top: auto !important;
           }
         }
       `}</style>
