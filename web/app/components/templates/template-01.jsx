@@ -1,4 +1,4 @@
-import brandFonts from "../../../Brand/fonts.json";
+import brandFonts from "../../../../Brand/fonts.json";
 
 export default function Template01({ width, height, palette, content, brand }) {
   const headlineFontStyle = {
@@ -19,8 +19,6 @@ export default function Template01({ width, height, palette, content, brand }) {
         width,
         height,
         overflow: "hidden",
-        borderRadius: 0,
-        boxShadow: "none",
         background: palette?.background || "#0b0f19",
         color: palette?.headline || "#ffffff",
         position: "relative",
@@ -68,7 +66,6 @@ export default function Template01({ width, height, palette, content, brand }) {
           {content?.body}
         </div>
 
-        {/* Footer logo */}
         <div style={{ position: "absolute", left: 48, bottom: 40, opacity: 0.6 }}>
           <img
             src={brand?.footerLogoSrc || "/brand/logo.svg"}
