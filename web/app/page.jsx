@@ -64,7 +64,7 @@ export default function Page() {
   const [subheadline, setSubheadline] = useState("Come stai?");
   const [body, setBody] = useState("Testo corpo opzionale…");
 
-  // Brand controls (puoi anche nasconderli all’utente in futuro)
+  // Brand controls
   const [paletteKey, setPaletteKey] = useState(
     brandConfig?.defaultPalette || paletteKeys[0] || "void"
   );
@@ -74,9 +74,9 @@ export default function Page() {
 
   const exportRef = useRef(null);
 
-  // ✅ Per calcolare la scala reale della preview in base allo spazio disponibile
+  // ✅ calcolo scala preview: usa larghezza + altezza
   const previewWrapRef = useRef(null);
-  const [previewWrapWidth, setPreviewWrapWidth] = useState(900);
+  const [previewWrapSize, setPreviewWrapSize] = useState({ w: 900, h: 800 });
 
   useEffect(() => {
     if (!previewWrapRef.current) return;
@@ -85,7 +85,8 @@ export default function Page() {
     const ro = new ResizeObserver((entries) => {
       for (const e of entries) {
         const w = e.contentRect?.width || 900;
-        setPreviewWrapWidth(w);
+        const h = e.contentRect?.height || 800;
+        setPreviewWrapSize({ w, h });
       }
     });
     ro.observe(el);
@@ -104,19 +105,27 @@ export default function Page() {
     return getTemplateById(templateId)?.Component;
   }, [templateId]);
 
-  // ✅ Scala: in base alla larghezza disponibile, così su schermi larghi cresce davvero
+  // ✅ Scale basata su spazio disponibile (W e H)
   const previewScale = useMemo(() => {
     const canvasW = selectedFormat.width;
+    const canvasH = selectedFormat.height;
 
-    // spazio utile: lascia un margine “aria” attorno al canvas
-    const padding = 24;
-    const available = Math.max(320, previewWrapWidth - padding * 2);
+    // margini interni della colonna preview
+    const padX = 40;
+    const padY = 40;
 
-    const s = available / canvasW;
+    const availableW = Math.max(320, previewWrapSize.w - padX * 2);
+    const availableH = Math.max(320, previewWrapSize.h - padY * 2);
 
-    // limiti ragionevoli
-    return Math.min(1, Math.max(0.22, s));
-  }, [previewWrapWidth, selectedFormat.width]);
+    // prendi la scala minima tra width e height (così entra sempre)
+    const sW = availableW / canvasW;
+    const sH = availableH / canvasH;
+
+    const s = Math.min(sW, sH);
+
+    // limiti: permettiamo più grande rispetto a prima
+    return Math.min(1.25, Math.max(0.22, s));
+  }, [previewWrapSize.w, previewWrapSize.h, selectedFormat.width, selectedFormat.height]);
 
   async function onExportPng() {
     if (!exportRef.current) return;
@@ -199,12 +208,12 @@ export default function Page() {
 
   return (
     <>
-      <main style={{ maxWidth: 1800, margin: "0 auto", padding: 24 }}>
+      <main style={{ maxWidth: 2200, margin: "0 auto", padding: 24 }}>
         <div
           style={{
             display: "grid",
-            // ✅ sinistra più grande su schermi larghi, senza esplodere
-            gridTemplateColumns: "clamp(380px, 32vw, 560px) minmax(520px, 1fr)",
+            // ✅ pannello molto più grande su desktop
+            gridTemplateColumns: "clamp(420px, 38vw, 720px) minmax(520px, 1fr)",
             gap: 24,
             alignItems: "start",
           }}
@@ -241,12 +250,12 @@ export default function Page() {
             style={{
               display: "flex",
               justifyContent: "center",
-              minHeight: "calc(100vh - 48px)",
+              height: "calc(100vh - 48px)", // ✅ ora abbiamo una “vera” altezza per scalare
               paddingTop: 8,
               overflow: "hidden",
             }}
           >
-            <div style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+            <div style={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
               <div style={{ transform: `scale(${previewScale})`, transformOrigin: "top center" }}>
                 {SelectedTemplate ? (
                   <SelectedTemplate
@@ -290,9 +299,8 @@ export default function Page() {
         </div>
       </main>
 
-      {/* ✅ responsive vero: su schermi piccoli va in colonna e il pannello non resta “sticky” */}
       <style>{`
-        @media (max-width: 1040px) {
+        @media (max-width: 1120px) {
           main > div {
             grid-template-columns: 1fr !important;
           }
