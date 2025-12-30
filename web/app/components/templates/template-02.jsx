@@ -1,4 +1,4 @@
-import brandFonts from "../../../Brand/fonts.json";
+import brandFonts from "../../../../Brand/fonts.json";
 
 export default function Template02({ width, height, palette, content, brand }) {
   const H = {
@@ -14,7 +14,6 @@ export default function Template02({ width, height, palette, content, brand }) {
 
   return (
     <div style={{ width, height, background: palette?.background || "#0b0f19", position: "relative", overflow: "hidden" }}>
-      {/* banda */}
       <div style={{ position: "absolute", left: 0, top: 0, width: 18, height: "100%", background: palette?.accent || "#7C3AED", opacity: 0.9 }} />
 
       <div style={{ padding: 64, color: palette?.headline || "#fff" }}>
