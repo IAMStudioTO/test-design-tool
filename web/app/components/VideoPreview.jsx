@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Player } from "@remotion/player";
+import dynamic from "next/dynamic";
 import {
   AbsoluteFill,
   Easing,
@@ -11,16 +11,34 @@ import {
   useVideoConfig,
 } from "remotion";
 
+// ✅ Player caricato SOLO lato browser
+const Player = dynamic(() => import("@remotion/player").then((m) => m.Player), {
+  ssr: false,
+  loading: () => (
+    <div
+      style={{
+        width: "min(980px, 100%)",
+        borderRadius: 18,
+        border: "1px solid rgba(0,0,0,0.08)",
+        background: "#000",
+        color: "#fff",
+        padding: 16,
+        fontSize: 14,
+      }}
+    >
+      Caricamento preview video…
+    </div>
+  ),
+});
+
 function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
 }
 
 function getPreset(motionStyle) {
-  // Preset motion “brand-safe” (puoi mapparli al tuo Brand/motion.json dopo)
   switch (motionStyle) {
     case "soft":
       return {
-        introDelay: 0,
         stagger: 6,
         springCfg: { damping: 18, stiffness: 110, mass: 1 },
         wipeDur: 16,
@@ -28,7 +46,6 @@ function getPreset(motionStyle) {
       };
     case "snappy":
       return {
-        introDelay: 0,
         stagger: 4,
         springCfg: { damping: 14, stiffness: 180, mass: 0.9 },
         wipeDur: 12,
@@ -36,7 +53,6 @@ function getPreset(motionStyle) {
       };
     default:
       return {
-        introDelay: 0,
         stagger: 5,
         springCfg: { damping: 16, stiffness: 150, mass: 1 },
         wipeDur: 14,
@@ -45,7 +61,6 @@ function getPreset(motionStyle) {
   }
 }
 
-// ---- Motion primitives ----
 function TextIn({ children, start = 0, fromY = 32, preset }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -60,14 +75,10 @@ function TextIn({ children, start = 0, fromY = 32, preset }) {
   const translateY = (1 - p) * fromY;
   const opacity = clamp(p, 0, 1);
 
-  return (
-    <div style={{ transform: `translateY(${translateY}px)`, opacity }}>
-      {children}
-    </div>
-  );
+  return <div style={{ transform: `translateY(${translateY}px)`, opacity }}>{children}</div>;
 }
 
-function WipeBar({ start = 0, preset, color = "rgba(255,255,255,0.7)" }) {
+function WipeBar({ start = 0, preset, color }) {
   const frame = useCurrentFrame();
 
   const prog = interpolate(frame, [start, start + preset.wipeDur], [0, 1], {
@@ -75,9 +86,6 @@ function WipeBar({ start = 0, preset, color = "rgba(255,255,255,0.7)" }) {
     extrapolateRight: "clamp",
     easing: Easing.out(Easing.cubic),
   });
-
-  // Wipe: cresce in larghezza e poi si assesta
-  const scaleX = prog;
 
   return (
     <div
@@ -87,18 +95,17 @@ function WipeBar({ start = 0, preset, color = "rgba(255,255,255,0.7)" }) {
         borderRadius: 999,
         background: color,
         transformOrigin: "left center",
-        transform: `scaleX(${scaleX})`,
-        opacity: 0.8,
+        transform: `scaleX(${prog})`,
+        opacity: 0.9,
       }}
     />
   );
 }
 
-function FloatingBlob({ start = 0, preset, accent = "#7C3AED" }) {
+function FloatingBlob({ start = 0, preset, accent }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // Entrata (spring)
   const p = spring({
     frame: frame - start,
     fps,
@@ -106,7 +113,6 @@ function FloatingBlob({ start = 0, preset, accent = "#7C3AED" }) {
     durationInFrames: 24,
   });
 
-  // “Respira” dopo l’entrata
   const t = (frame - (start + 20)) / fps;
   const float = Math.sin(t * 1.2) * preset.floatAmp;
 
@@ -125,39 +131,34 @@ function FloatingBlob({ start = 0, preset, accent = "#7C3AED" }) {
         background: accent,
         opacity,
         transform: `translateY(${float}px) scale(${scale})`,
-        filter: "blur(0px)",
       }}
     />
   );
 }
 
-function SafeShadow({ start = 0 }) {
-  // piccola vignettatura/contrasto per “qualità video”
+function FooterLogo({ brand, start = 0 }) {
   const frame = useCurrentFrame();
-  const op = interpolate(frame, [start, start + 16], [0, 1], {
+  const op = interpolate(frame, [start, start + 14], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
   });
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        boxShadow: "inset 0 0 160px rgba(0,0,0,0.25)",
-        opacity: op * 0.9,
-        pointerEvents: "none",
-      }}
-    />
+    <div style={{ position: "absolute", left: 56, bottom: 44, opacity: op * 0.7 }}>
+      <img
+        src={brand?.footerLogoSrc || "/brand/logo.svg"}
+        alt="Brand logo"
+        style={{ height: 14, width: "auto", display: "block" }}
+      />
+    </div>
   );
 }
 
-// ---- Scene: motion su testo + grafiche ----
-function Template01MotionScene({ width, height, palette, content, brand, motionStyle }) {
+function SceneImpl({ width, height, palette, content, brand, motionStyle }) {
   const preset = getPreset(motionStyle);
 
-  // font sizes basate su width (coerenti con export)
-  const headlineSize = Math.round(width * 0.075); // ↑ più grande rispetto prima
+  const headlineSize = Math.round(width * 0.075);
   const subSize = Math.round(width * 0.028);
   const bodySize = Math.round(width * 0.020);
 
@@ -166,15 +167,11 @@ function Template01MotionScene({ width, height, palette, content, brand, motionS
   const subColor = palette?.subheadline || "rgba(255,255,255,0.88)";
   const bg = palette?.background || "#0b0f19";
 
-  const start = preset.introDelay;
+  const start = 0;
 
   return (
     <AbsoluteFill style={{ background: bg, color: palette?.headline || "#fff" }}>
-      {/* grafica di brand */}
       <FloatingBlob start={start + 2} preset={preset} accent={accent} />
-
-      {/* leggera vignetta */}
-      <SafeShadow start={start + 4} />
 
       <div style={{ padding: 56, position: "relative", height: "100%" }}>
         <div style={{ fontSize: 14, opacity: 0.75, color: metaColor }}>
@@ -204,61 +201,32 @@ function Template01MotionScene({ width, height, palette, content, brand, motionS
             </TextIn>
           </div>
 
-          {/* Accento grafico (wipe) */}
           <div style={{ marginTop: 22 }}>
-            <WipeBar
-              start={start + preset.stagger}
-              preset={preset}
-              color={accent}
-            />
+            <WipeBar start={start + preset.stagger} preset={preset} color={accent} />
           </div>
         </div>
 
-        {/* footer logo con fade-in */}
         <FooterLogo brand={brand} start={start + preset.stagger * 2} />
       </div>
     </AbsoluteFill>
   );
 }
 
-function FooterLogo({ brand, start = 0 }) {
-  const frame = useCurrentFrame();
-  const op = interpolate(frame, [start, start + 14], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
-  });
-
-  return (
-    <div style={{ position: "absolute", left: 56, bottom: 44, opacity: op * 0.7 }}>
-      <img
-        src={brand?.footerLogoSrc || "/brand/logo.svg"}
-        alt="Brand logo"
-        style={{ height: 14, width: "auto", display: "block" }}
-      />
-    </div>
-  );
-}
-
-// ---- Public component ----
 export default function VideoPreview({
   width,
   height,
   palette,
   content,
   brand,
-  templateId,
   motionStyle,
 }) {
   const fps = 30;
-  const durationInFrames = 120; // 4s: abbastanza per vedere intro + “respiro”
+  const durationInFrames = 120;
 
   const Scene = useMemo(() => {
-    return function SceneComp() {
-      // Qui puoi fare switch per templateId (template-02,03,04)
-      // Step successivo: scene diverse per ogni template.
+    return function SceneComponent() {
       return (
-        <Template01MotionScene
+        <SceneImpl
           width={width}
           height={height}
           palette={palette}
