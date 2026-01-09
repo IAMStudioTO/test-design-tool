@@ -1,16 +1,24 @@
 import brandFonts from "../../../../Brand/fonts.json";
+import { Slot } from "./TemplateSlots";
 
 export default function Template01({ width, height, palette, content, brand }) {
-  const headlineFontStyle = {
-    fontFamily: `"${brandFonts?.headline?.family || "OMNI Display"}", system-ui, -apple-system, sans-serif`,
-    fontWeight: brandFonts?.headline?.weight ?? 600,
-    letterSpacing: `${brandFonts?.headline?.letterSpacing ?? 0}px`,
+  const headlineStyle = {
+    fontFamily: `"${brandFonts?.headline?.family || "sans-serif"}"`,
+    fontWeight: 700,
+    fontSize: Math.round(width * 0.075),
+    lineHeight: 1.03,
   };
 
-  const subheadlineFontStyle = {
-    fontFamily: `"${brandFonts?.subheadline?.family || "OMNI Mono"}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
-    fontWeight: brandFonts?.subheadline?.weight ?? 400,
-    letterSpacing: `${brandFonts?.subheadline?.letterSpacing ?? 0}px`,
+  const subStyle = {
+    fontFamily: `"${brandFonts?.subheadline?.family || "sans-serif"}"`,
+    fontSize: Math.round(width * 0.028),
+    lineHeight: 1.2,
+  };
+
+  const bodyStyle = {
+    fontSize: Math.round(width * 0.02),
+    lineHeight: 1.4,
+    maxWidth: width * 0.7,
   };
 
   return (
@@ -18,62 +26,51 @@ export default function Template01({ width, height, palette, content, brand }) {
       style={{
         width,
         height,
-        overflow: "hidden",
-        background: palette?.background || "#0b0f19",
-        color: palette?.headline || "#ffffff",
+        background: palette.background,
+        color: palette.headline,
+        padding: 56,
         position: "relative",
       }}
     >
-      <div style={{ padding: 48 }}>
-        <div style={{ fontSize: 14, opacity: 0.65, color: palette?.meta || "#9ca3af" }}>
-          {brand?.templateLabel || "TEMPLATE 01"}
-        </div>
-
-        <h1
-          style={{
-            ...headlineFontStyle,
-            margin: "140px 0 0 0",
-            fontSize: Math.round(width * 0.07),
-            lineHeight: 1.04,
-          }}
-        >
-          {content?.headline}
-        </h1>
-
-        <p
-          style={{
-            ...subheadlineFontStyle,
-            margin: "18px 0 0 0",
-            fontSize: Math.round(width * 0.024),
-            lineHeight: 1.25,
-            color: palette?.subheadline || "rgba(255,255,255,0.9)",
-          }}
-        >
-          {content?.subheadline}
-        </p>
-
-        <div
-          style={{
-            ...subheadlineFontStyle,
-            margin: "18px 0 0 0",
-            fontSize: Math.round(width * 0.018),
-            lineHeight: 1.35,
-            color: palette?.subheadline || "rgba(255,255,255,0.85)",
-            maxWidth: Math.round(width * 0.72),
-            opacity: 0.9,
-          }}
-        >
-          {content?.body}
-        </div>
-
-        <div style={{ position: "absolute", left: 48, bottom: 40, opacity: 0.6 }}>
-          <img
-            src={brand?.footerLogoSrc || "/brand/logo.svg"}
-            alt="Brand logo"
-            style={{ height: 14, width: "auto", display: "block" }}
-          />
-        </div>
+      <div style={{ fontSize: 14, opacity: 0.6 }}>
+        {brand.templateLabel}
       </div>
+
+      <div style={{ marginTop: 140 }}>
+        <Slot name="headline">
+          <div style={headlineStyle}>{content.headline}</div>
+        </Slot>
+
+        <div style={{ marginTop: 14 }}>
+          <Slot name="subheadline">
+            <div style={subStyle}>{content.subheadline}</div>
+          </Slot>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <Slot name="body">
+            <div style={bodyStyle}>{content.body}</div>
+          </Slot>
+        </div>
+
+        <Slot name="accent">
+          <div
+            style={{
+              marginTop: 22,
+              width: 240,
+              height: 6,
+              background: palette.accent,
+              borderRadius: 999,
+            }}
+          />
+        </Slot>
+      </div>
+
+      <Slot name="logo">
+        <div style={{ position: "absolute", left: 56, bottom: 44, opacity: 0.6 }}>
+          <img src={brand.footerLogoSrc} height={14} alt="logo" />
+        </div>
+      </Slot>
     </div>
   );
 }
