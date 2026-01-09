@@ -5,7 +5,6 @@ import { toPng } from "html-to-image";
 
 import brandColors from "../../Brand/colors.json";
 import brandConfig from "../../Brand/brand.config.json";
-import brandMotion from "../../Brand/motion.json";
 
 import ControlPanel from "./components/ControlPanel";
 import { TEMPLATE_LIST, getTemplateById } from "./components/templates";
@@ -53,23 +52,22 @@ function downloadBlob(blob, filename) {
 export default function Page() {
   const formatsByGroup = useMemo(() => groupedFormats(), []);
   const paletteKeys = useMemo(() => Object.keys(brandColors || {}), []);
-  const motionKeys = useMemo(() => Object.keys(brandMotion || {}), []);
 
   const [templateId, setTemplateId] = useState(TEMPLATE_LIST[0]?.id || "template-01");
   const [formatKey, setFormatKey] = useState(FORMATS[0].key);
 
+  // ✅ utente
   const [headline, setHeadline] = useState("Ciao");
   const [subheadline, setSubheadline] = useState("Come stai?");
   const [body, setBody] = useState("Testo corpo opzionale…");
 
+  // ✅ colore
   const [paletteKey, setPaletteKey] = useState(
     brandConfig?.defaultPalette || paletteKeys[0] || "void"
   );
 
-  // motion preset: usato dalla preview video live
-  const [motionKey, setMotionKey] = useState(motionKeys[0] || "default");
-
   const [previewMode, setPreviewMode] = useState("design"); // design | video
+  const [mp4State, setMp4State] = useState({ loading: false, phase: "", error: "" });
 
   const exportRef = useRef(null);
 
@@ -81,9 +79,13 @@ export default function Page() {
     return brandColors?.[paletteKey] || {};
   }, [paletteKey]);
 
-  const SelectedTemplate = useMemo(() => {
-    return getTemplateById(templateId)?.Component;
+  // ✅ Template selezionato (include motionKey)
+  const selectedTemplate = useMemo(() => {
+    return getTemplateById(templateId);
   }, [templateId]);
+
+  const SelectedTemplateComponent = selectedTemplate?.Component;
+  const motionKeyForTemplate = selectedTemplate?.motionKey || "standard";
 
   // Fit-to-container per preview design
   const previewWrapRef = useRef(null);
@@ -137,40 +139,61 @@ export default function Page() {
   }
 
   async function onExportMp4() {
-    const payload = {
-      templateId,
-      formatKey,
-      paletteKey,
-      motionStyle: motionKey,
-      content: { headline, subheadline, body },
-    };
+    setMp4State({ loading: true, phase: "starting", error: "" });
 
-    const startRes = await fetch(`${RENDER_URL}/render/mp4/start`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      // ✅ motion preso dal template selezionato
+      const payload = {
+        templateId,
+        formatKey,
+        paletteKey,
+        motionStyle: motionKeyForTemplate,
+        content: { headline, subheadline, body },
+      };
 
-    if (!startRes.ok) throw new Error(`Start MP4 failed (${startRes.status})`);
+      const startRes = await fetch(`${RENDER_URL}/render/mp4/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    const { jobId } = await startRes.json();
-    if (!jobId) throw new Error("No jobId returned");
+      if (!startRes.ok) throw new Error(`Start MP4 failed (${startRes.status})`);
 
-    while (true) {
-      const statusRes = await fetch(`${RENDER_URL}/render/mp4/status/${jobId}`);
-      const data = await statusRes.json();
-      const job = data?.job;
+      const { jobId } = await startRes.json();
+      if (!jobId) throw new Error("No jobId returned");
 
-      if (job?.status === "done") break;
-      if (job?.status === "error") throw new Error(job.error || "Render error");
-      await new Promise((r) => setTimeout(r, 1200));
+      const startTime = Date.now();
+      const TIMEOUT_MS = 10 * 60 * 1000;
+
+      while (true) {
+        if (Date.now() - startTime > TIMEOUT_MS) throw new Error("Timeout MP4 render");
+
+        const statusRes = await fetch(`${RENDER_URL}/render/mp4/status/${jobId}`);
+        if (!statusRes.ok) throw new Error(`Status failed (${statusRes.status})`);
+
+        const data = await statusRes.json();
+        const job = data?.job;
+
+        if (!job) throw new Error("Invalid status payload");
+        if (job.status === "error") throw new Error(job.error || "Render error");
+        if (job.status === "done") break;
+
+        setMp4State({ loading: true, phase: job.phase || "working", error: "" });
+        await new Promise((res) => setTimeout(res, 1200));
+      }
+
+      setMp4State({ loading: true, phase: "downloading", error: "" });
+
+      const fileRes = await fetch(`${RENDER_URL}/render/mp4/download/${jobId}`);
+      if (!fileRes.ok) throw new Error(`Download failed (${fileRes.status})`);
+
+      const blob = await fileRes.blob();
+      downloadBlob(blob, `${brandConfig?.id || "brand"}_${templateId}_${formatKey}.mp4`);
+
+      setMp4State({ loading: false, phase: "", error: "" });
+    } catch (e) {
+      setMp4State({ loading: false, phase: "", error: e?.message || "MP4 error" });
     }
-
-    const fileRes = await fetch(`${RENDER_URL}/render/mp4/download/${jobId}`);
-    if (!fileRes.ok) throw new Error(`Download failed (${fileRes.status})`);
-
-    const blob = await fileRes.blob();
-    downloadBlob(blob, `${brandConfig?.id || "brand"}_${templateId}_${formatKey}.mp4`);
   }
 
   return (
@@ -182,28 +205,20 @@ export default function Page() {
               templates={TEMPLATE_LIST}
               templateId={templateId}
               setTemplateId={setTemplateId}
-              paletteKeys={paletteKeys}
-              paletteKey={paletteKey}
-              setPaletteKey={setPaletteKey}
-              motionKeys={motionKeys}
-              motionKey={motionKey}
-              setMotionKey={setMotionKey}
-              previewMode={previewMode}
-              setPreviewMode={setPreviewMode}
               headline={headline}
               setHeadline={(v) => setHeadline(v.slice(0, HEADLINE_MAX))}
               subheadline={subheadline}
               setSubheadline={(v) => setSubheadline(v.slice(0, SUBHEAD_MAX))}
               body={body}
               setBody={(v) => setBody(v.slice(0, BODY_MAX))}
+              paletteKeys={paletteKeys}
+              paletteKey={paletteKey}
+              setPaletteKey={setPaletteKey}
+              previewMode={previewMode}
+              setPreviewMode={setPreviewMode}
               onExportPng={onExportPng}
-              onExportMp4={async () => {
-                try {
-                  await onExportMp4();
-                } catch (e) {
-                  alert(e?.message || "MP4 error");
-                }
-              }}
+              onExportMp4={onExportMp4}
+              mp4State={mp4State}
             />
           </div>
 
@@ -221,13 +236,14 @@ export default function Page() {
                       templateLabel: brandConfig?.templateLabel || "TEMPLATE",
                       footerLogoSrc: "/brand/logo.svg",
                     }}
-                    motionStyle={motionKey}
+                    // ✅ motion appiccicato al template
+                    motionStyle={motionKeyForTemplate}
                   />
                 </div>
               ) : (
                 <div className="previewScaled" style={{ transform: `scale(${previewScale})` }}>
-                  {SelectedTemplate ? (
-                    <SelectedTemplate
+                  {SelectedTemplateComponent ? (
+                    <SelectedTemplateComponent
                       width={selectedFormat.width}
                       height={selectedFormat.height}
                       palette={palette}
@@ -238,7 +254,6 @@ export default function Page() {
                         footerLogoSrc: "/brand/logo.svg",
                       }}
                       formatKey={formatKey}
-                      motionStyle={motionKey}
                     />
                   ) : null}
                 </div>
@@ -250,8 +265,8 @@ export default function Page() {
         {/* EXPORT CANVAS HIDDEN */}
         <div style={{ position: "absolute", left: -99999, top: 0 }}>
           <div ref={exportRef}>
-            {SelectedTemplate ? (
-              <SelectedTemplate
+            {SelectedTemplateComponent ? (
+              <SelectedTemplateComponent
                 width={selectedFormat.width}
                 height={selectedFormat.height}
                 palette={palette}
@@ -262,7 +277,6 @@ export default function Page() {
                   footerLogoSrc: "/brand/logo.svg",
                 }}
                 formatKey={formatKey}
-                motionStyle={motionKey}
               />
             ) : null}
           </div>
