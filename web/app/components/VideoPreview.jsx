@@ -52,32 +52,23 @@ function MotionWrap({ index, preset, children }) {
   const opacity = type === "fade" ? p : Math.min(1, p * 1.2);
   const translateY = type.includes("up") ? (1 - p) * 32 : 0;
 
-  const overshoot =
-    type === "slide-up-overshoot"
-      ? interpolate(p, [0, 1], [1.03, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        })
-      : 1;
+  // overshoot SOLO per contenuti testuali
+  const scale = type === "slide-up-overshoot" ? 1 + (1 - p) * 0.03 : 1;
 
   return (
-    <div style={{ opacity, transform: `translateY(${translateY}px) scale(${overshoot})` }}>
+    <div style={{ opacity, transform: `translateY(${translateY}px) scale(${scale})` }}>
       {children}
     </div>
   );
 }
 
-/**
- * ✅ Fade-only wrapper: nessun transform.
- * Utile per logo (deve stare fermo ma può comparire).
- */
-function FadeOnly({ startFrame = 0, duration = 14, maxOpacity = 0.6, children }) {
+// ✅ Fade-only wrapper: niente transform (perfetto per logo e grafiche “strutturali”)
+function FadeOnly({ startFrame = 0, duration = 14, maxOpacity = 1, children }) {
   const frame = useCurrentFrame();
   const o = interpolate(frame, [startFrame, startFrame + duration], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-
   return <div style={{ opacity: o * maxOpacity }}>{children}</div>;
 }
 
@@ -88,40 +79,48 @@ function MotionScene({ TemplateComponent, templateProps, motionKey }) {
     throw new Error("VideoPreview: TemplateComponent is undefined/null");
   }
 
-  // Ordine per lo stagger (solo elementi “contenuto”)
-  const slotOrder = ["headline", "subheadline", "body", "accent"];
+  const templateId = templateProps?.templateId || "";
+
+  // Stagger solo per testo (non per logo/accent)
+  const order = ["headline", "subheadline", "body"];
 
   const render = useMemo(() => {
-    const makeAnimated = (slotName) => (node) => (
-      <MotionWrap index={Math.max(0, slotOrder.indexOf(slotName))} preset={preset}>
+    const identity = (n) => n;
+
+    const animateText = (slotName) => (node) => (
+      <MotionWrap index={Math.max(0, order.indexOf(slotName))} preset={preset}>
         {node}
       </MotionWrap>
     );
 
-    const identity = (n) => n;
-
     return {
-      // meta fisso (può restare così)
       meta: identity,
 
-      // ✅ logo: solo fade, zero movimento
-      logo: (node) => (
+      headline: animateText("headline"),
+      subheadline: animateText("subheadline"),
+      body: animateText("body"),
+
+      // ✅ ACCENT:
+      // - Template 02: barra verticale → deve restare perfettamente ferma → solo fade
+      // - Template 01/03: puoi anche lasciarla ferma per coerenza (ora: solo fade per tutti)
+      accent: (node) => (
         <FadeOnly
-          startFrame={18}      // puoi anticipare/posticipare
-          duration={16}        // durata fade
-          maxOpacity={0.6}     // in linea col tuo template (opacity 0.6)
+          startFrame={6}
+          duration={16}
+          maxOpacity={templateId === "template-02" ? 0.9 : 1}
         >
           {node}
         </FadeOnly>
       ),
 
-      // contenuti animati
-      headline: makeAnimated("headline"),
-      subheadline: makeAnimated("subheadline"),
-      body: makeAnimated("body"),
-      accent: makeAnimated("accent"),
+      // ✅ LOGO: solo fade, fermo
+      logo: (node) => (
+        <FadeOnly startFrame={18} duration={16} maxOpacity={0.6}>
+          {node}
+        </FadeOnly>
+      ),
     };
-  }, [preset]);
+  }, [preset, templateId]);
 
   return (
     <AbsoluteFill style={{ background: "transparent" }}>
