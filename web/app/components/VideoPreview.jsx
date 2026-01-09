@@ -67,6 +67,20 @@ function MotionWrap({ index, preset, children }) {
   );
 }
 
+/**
+ * ✅ Fade-only wrapper: nessun transform.
+ * Utile per logo (deve stare fermo ma può comparire).
+ */
+function FadeOnly({ startFrame = 0, duration = 14, maxOpacity = 0.6, children }) {
+  const frame = useCurrentFrame();
+  const o = interpolate(frame, [startFrame, startFrame + duration], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  return <div style={{ opacity: o * maxOpacity }}>{children}</div>;
+}
+
 function MotionScene({ TemplateComponent, templateProps, motionKey }) {
   const preset = getPreset(motionKey);
 
@@ -87,11 +101,21 @@ function MotionScene({ TemplateComponent, templateProps, motionKey }) {
     const identity = (n) => n;
 
     return {
-      // ✅ meta e logo NON animati: restano fissi (nessun transform/opacity wrapper)
+      // meta fisso (può restare così)
       meta: identity,
-      logo: identity,
 
-      // ✅ contenuti animati
+      // ✅ logo: solo fade, zero movimento
+      logo: (node) => (
+        <FadeOnly
+          startFrame={18}      // puoi anticipare/posticipare
+          duration={16}        // durata fade
+          maxOpacity={0.6}     // in linea col tuo template (opacity 0.6)
+        >
+          {node}
+        </FadeOnly>
+      ),
+
+      // contenuti animati
       headline: makeAnimated("headline"),
       subheadline: makeAnimated("subheadline"),
       body: makeAnimated("body"),
