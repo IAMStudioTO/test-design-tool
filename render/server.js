@@ -62,6 +62,9 @@ app.get("/fonts/:fontId", async (req, res) => {
 ======================= */
 const REMOTION_ENTRY = path.join(process.cwd(), "remotion", "entry.jsx");
 
+// ✅ nuova composition unica
+const COMPOSITION_ID = "BrandVideo";
+
 let bundled = null;
 
 async function bundleOnce() {
@@ -85,13 +88,12 @@ async function bundleOnce() {
 ======================= */
 const jobs = new Map();
 
-const toIdSafe = (formatKey) => (formatKey || "ig_post_1_1").replaceAll("_", "-");
-
 /* =======================
    START MP4 RENDER
 ======================= */
 app.post("/render/mp4/start", async (req, res) => {
-  const { headline, subheadline, paletteKey, motionStyle, formatKey } = req.body;
+  // ✅ nuovo payload (compatibile con la web)
+  const { templateId, formatKey, paletteKey, motionStyle, content } = req.body || {};
 
   const jobId = `job_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   jobs.set(jobId, { status: "queued", phase: "bundling" });
@@ -101,16 +103,27 @@ app.post("/render/mp4/start", async (req, res) => {
     const serveUrl = await bundleOnce();
     jobs.set(jobId, { status: "working", phase: "compositions" });
 
-    const compositions = await getCompositions(serveUrl, {
-      inputProps: { headline, subheadline, paletteKey, motionStyle, formatKey },
-    });
+    const inputProps = {
+      templateId: templateId || "template-01",
+      formatKey: formatKey || "ig_post_1_1",
+      paletteKey: paletteKey || "void",
+      motionStyle: motionStyle || "standard",
+      content: {
+        headline: content?.headline || "",
+        subheadline: content?.subheadline || "",
+        body: content?.body || "",
+      },
+    };
 
-    const compositionId = `Template01-${toIdSafe(formatKey)}`;
-    const composition = compositions.find((c) => c.id === compositionId);
+    const compositions = await getCompositions(serveUrl, { inputProps });
+
+    const composition = compositions.find((c) => c.id === COMPOSITION_ID);
 
     if (!composition) {
       const available = compositions.map((c) => c.id).slice(0, 30);
-      throw new Error(`Composition not found: ${compositionId}. Available: ${available.join(", ")}`);
+      throw new Error(
+        `Composition not found: ${COMPOSITION_ID}. Available: ${available.join(", ")}`
+      );
     }
 
     jobs.set(jobId, { status: "working", phase: "rendering" });
@@ -122,14 +135,14 @@ app.post("/render/mp4/start", async (req, res) => {
       serveUrl,
       codec: "h264",
       outputLocation: outPath,
-      inputProps: { headline, subheadline, paletteKey, motionStyle, formatKey },
+      inputProps,
       timeoutInMilliseconds: 600000,
     });
 
     jobs.set(jobId, { status: "done", phase: "done", file: outPath });
   } catch (e) {
     console.error("[MP4] JOB ERROR", e);
-    jobs.set(jobId, { status: "error", error: e.message });
+    jobs.set(jobId, { status: "error", error: e?.message || String(e) });
   }
 });
 
