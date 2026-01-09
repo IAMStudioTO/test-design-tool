@@ -2,7 +2,13 @@
 
 import React, { useMemo } from "react";
 import dynamic from "next/dynamic";
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import {
+  AbsoluteFill,
+  interpolate,
+  spring,
+  useCurrentFrame,
+  useVideoConfig,
+} from "remotion";
 
 import brandMotion from "../../../Brand/motion.json";
 import { SlotProvider } from "./templates/TemplateSlots";
@@ -27,17 +33,23 @@ const Player = dynamic(() => import("@remotion/player").then((m) => m.Player), {
 });
 
 function getPreset(motionKey) {
-  return brandMotion?.[motionKey] || brandMotion?.standard || {
-    text: { type: "slide-up", stagger: 6, spring: { damping: 16, stiffness: 140 } },
-    graphics: { blob: true, wipe: true },
-  };
+  return (
+    (brandMotion && brandMotion[motionKey]) ||
+    (brandMotion && brandMotion.standard) || {
+      text: {
+        type: "slide-up",
+        stagger: 6,
+        spring: { damping: 16, stiffness: 140 },
+      },
+      graphics: { blob: true, wipe: true },
+    }
+  );
 }
 
 function MotionSlotWrapper({ name, children, preset }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // Ordine degli slot per staggering “coerente”
   const order = ["meta", "headline", "subheadline", "body", "accent", "logo"];
   const index = Math.max(0, order.indexOf(name));
   const delay = index * (preset?.text?.stagger ?? 6);
@@ -49,21 +61,17 @@ function MotionSlotWrapper({ name, children, preset }) {
     durationInFrames: 26,
   });
 
-  // Tipi di motion (brand-safe)
   const type = preset?.text?.type || "slide-up";
 
-  const opacity =
-    type === "fade"
-      ? p
-      : Math.min(1, p * 1.2);
+  const opacity = type === "fade" ? p : Math.min(1, p * 1.2);
+  const translateY = type.includes("up") ? (1 - p) * 32 : 0;
 
-  const translateY =
-    type.includes("up") ? (1 - p) * 32 : 0;
-
-  // Piccolo “overshoot” controllato per slide-up-overshoot
   const overshoot =
     type === "slide-up-overshoot"
-      ? interpolate(p, [0, 1], [1.03, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+      ? interpolate(p, [0, 1], [1.03, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })
       : 1;
 
   return (
@@ -76,7 +84,6 @@ function MotionSlotWrapper({ name, children, preset }) {
 function MotionScene({ TemplateComponent, templateProps, motionKey }) {
   const preset = getPreset(motionKey);
 
-  // Slot renderer: wrappa gli slot con MotionSlotWrapper
   const renderSlot = useMemo(() => {
     return (name, children) => (
       <MotionSlotWrapper name={name} preset={preset}>
@@ -84,6 +91,11 @@ function MotionScene({ TemplateComponent, templateProps, motionKey }) {
       </MotionSlotWrapper>
     );
   }, [preset]);
+
+  if (!TemplateComponent) {
+    // ✅ errore super chiaro se TemplateComponent non arriva
+    throw new Error("VideoPreview: TemplateComponent is undefined/null");
+  }
 
   return (
     <AbsoluteFill style={{ background: "transparent" }}>
@@ -94,11 +106,37 @@ function MotionScene({ TemplateComponent, templateProps, motionKey }) {
   );
 }
 
-export default function VideoPreview({
-  TemplateComponent,
-  templateProps,
-  motionStyle, // motionKey attaccato al template
-}) {
+function ErrorFallback({ error }) {
+  return (
+    <div
+      style={{
+        width: "min(980px, 100%)",
+        borderRadius: 18,
+        border: "1px solid rgba(255,255,255,0.12)",
+        background: "#0b0f19",
+        color: "#fff",
+        padding: 16,
+        fontSize: 13,
+        lineHeight: 1.35,
+        whiteSpace: "pre-wrap",
+      }}
+    >
+      <div style={{ fontWeight: 800, marginBottom: 10 }}>
+        ❌ Errore nella preview video (Remotion)
+      </div>
+      <div style={{ opacity: 0.9, marginBottom: 10 }}>
+        {String(error?.message || error)}
+      </div>
+      {error?.stack ? (
+        <div style={{ opacity: 0.7 }}>
+          {String(error.stack)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export default function VideoPreview({ TemplateComponent, templateProps, motionStyle }) {
   const fps = 30;
   const durationInFrames = 120;
 
@@ -118,12 +156,19 @@ export default function VideoPreview({
     <Player
       component={Scene}
       durationInFrames={durationInFrames}
-      compositionWidth={templateProps.width}
-      compositionHeight={templateProps.height}
+      compositionWidth={templateProps?.width || 1080}
+      compositionHeight={templateProps?.height || 1080}
       fps={fps}
       autoPlay
       loop
       controls
+      // ✅ MOSTRA L’ERRORE A SCHERMO
+      errorFallback={({ error }) => <ErrorFallback error={error} />}
+      // ✅ utile per vedere anche in console
+      onError={(err) => {
+        // eslint-disable-next-line no-console
+        console.error("Remotion Player error:", err);
+      }}
       style={{
         width: "min(980px, 100%)",
         borderRadius: 18,
