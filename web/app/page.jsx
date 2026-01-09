@@ -50,18 +50,16 @@ function downloadBlob(blob, filename) {
 }
 
 export default function Page() {
-  const formatsByGroup = useMemo(() => groupedFormats(), []);
+  useMemo(() => groupedFormats(), []);
   const paletteKeys = useMemo(() => Object.keys(brandColors || {}), []);
 
   const [templateId, setTemplateId] = useState(TEMPLATE_LIST[0]?.id || "template-01");
   const [formatKey, setFormatKey] = useState(FORMATS[0].key);
 
-  // ✅ utente
   const [headline, setHeadline] = useState("Ciao");
   const [subheadline, setSubheadline] = useState("Come stai?");
   const [body, setBody] = useState("Testo corpo opzionale…");
 
-  // ✅ colore
   const [paletteKey, setPaletteKey] = useState(
     brandConfig?.defaultPalette || paletteKeys[0] || "void"
   );
@@ -79,11 +77,7 @@ export default function Page() {
     return brandColors?.[paletteKey] || {};
   }, [paletteKey]);
 
-  // ✅ Template selezionato (include motionKey)
-  const selectedTemplate = useMemo(() => {
-    return getTemplateById(templateId);
-  }, [templateId]);
-
+  const selectedTemplate = useMemo(() => getTemplateById(templateId), [templateId]);
   const SelectedTemplateComponent = selectedTemplate?.Component;
   const motionKeyForTemplate = selectedTemplate?.motionKey || "standard";
 
@@ -142,11 +136,11 @@ export default function Page() {
     setMp4State({ loading: true, phase: "starting", error: "" });
 
     try {
-      // ✅ motion preso dal template selezionato
       const payload = {
         templateId,
         formatKey,
         paletteKey,
+        // ✅ motion appiccicato al template
         motionStyle: motionKeyForTemplate,
         content: { headline, subheadline, body },
       };
@@ -196,6 +190,21 @@ export default function Page() {
     }
   }
 
+  // Props comuni per template
+  const templateProps = useMemo(() => {
+    return {
+      width: selectedFormat.width,
+      height: selectedFormat.height,
+      palette,
+      content: { headline, subheadline, body },
+      brand: {
+        id: brandConfig?.id || "brand",
+        templateLabel: brandConfig?.templateLabel || "TEMPLATE",
+        footerLogoSrc: "/brand/logo.svg",
+      },
+    };
+  }, [selectedFormat.width, selectedFormat.height, palette, headline, subheadline, body]);
+
   return (
     <>
       <main className="layoutRoot">
@@ -226,36 +235,18 @@ export default function Page() {
             <div className="previewCenter">
               {previewMode === "video" ? (
                 <div className="videoWrap">
-                  <VideoPreview
-                    width={selectedFormat.width}
-                    height={selectedFormat.height}
-                    palette={palette}
-                    content={{ headline, subheadline, body }}
-                    brand={{
-                      id: brandConfig?.id || "brand",
-                      templateLabel: brandConfig?.templateLabel || "TEMPLATE",
-                      footerLogoSrc: "/brand/logo.svg",
-                    }}
-                    // ✅ motion appiccicato al template
-                    motionStyle={motionKeyForTemplate}
-                  />
+                  {SelectedTemplateComponent ? (
+                    <VideoPreview
+                      TemplateComponent={SelectedTemplateComponent}
+                      templateProps={templateProps}
+                      // ✅ motion del template
+                      motionStyle={motionKeyForTemplate}
+                    />
+                  ) : null}
                 </div>
               ) : (
                 <div className="previewScaled" style={{ transform: `scale(${previewScale})` }}>
-                  {SelectedTemplateComponent ? (
-                    <SelectedTemplateComponent
-                      width={selectedFormat.width}
-                      height={selectedFormat.height}
-                      palette={palette}
-                      content={{ headline, subheadline, body }}
-                      brand={{
-                        id: brandConfig?.id || "brand",
-                        templateLabel: brandConfig?.templateLabel || "TEMPLATE",
-                        footerLogoSrc: "/brand/logo.svg",
-                      }}
-                      formatKey={formatKey}
-                    />
-                  ) : null}
+                  {SelectedTemplateComponent ? <SelectedTemplateComponent {...templateProps} /> : null}
                 </div>
               )}
             </div>
@@ -265,20 +256,7 @@ export default function Page() {
         {/* EXPORT CANVAS HIDDEN */}
         <div style={{ position: "absolute", left: -99999, top: 0 }}>
           <div ref={exportRef}>
-            {SelectedTemplateComponent ? (
-              <SelectedTemplateComponent
-                width={selectedFormat.width}
-                height={selectedFormat.height}
-                palette={palette}
-                content={{ headline, subheadline, body }}
-                brand={{
-                  id: brandConfig?.id || "brand",
-                  templateLabel: brandConfig?.templateLabel || "TEMPLATE",
-                  footerLogoSrc: "/brand/logo.svg",
-                }}
-                formatKey={formatKey}
-              />
-            ) : null}
+            {SelectedTemplateComponent ? <SelectedTemplateComponent {...templateProps} /> : null}
           </div>
         </div>
       </main>
