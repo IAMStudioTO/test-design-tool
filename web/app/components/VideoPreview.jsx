@@ -2,192 +2,124 @@
 
 import React, { useMemo } from "react";
 import dynamic from "next/dynamic";
-import {
-  AbsoluteFill,
-  interpolate,
-  spring,
-  useCurrentFrame,
-  useVideoConfig,
-} from "remotion";
+import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 
 import brandMotion from "../../../Brand/motion.json";
+import { SlotProvider } from "./templates/TemplateSlots";
 
-const Player = dynamic(
-  () => import("@remotion/player").then((m) => m.Player),
-  { ssr: false }
-);
+const Player = dynamic(() => import("@remotion/player").then((m) => m.Player), {
+  ssr: false,
+  loading: () => (
+    <div
+      style={{
+        width: "min(980px, 100%)",
+        borderRadius: 18,
+        border: "1px solid rgba(0,0,0,0.08)",
+        background: "#000",
+        color: "#fff",
+        padding: 16,
+        fontSize: 14,
+      }}
+    >
+      Caricamento preview video…
+    </div>
+  ),
+});
 
-/* =========================
-   Motion primitives
-   ========================= */
+function getPreset(motionKey) {
+  return brandMotion?.[motionKey] || brandMotion?.standard || {
+    text: { type: "slide-up", stagger: 6, spring: { damping: 16, stiffness: 140 } },
+    graphics: { blob: true, wipe: true },
+  };
+}
 
-function AnimatedText({ children, start, preset, fromY = 30 }) {
+function MotionSlotWrapper({ name, children, preset }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
+  // Ordine degli slot per staggering “coerente”
+  const order = ["meta", "headline", "subheadline", "body", "accent", "logo"];
+  const index = Math.max(0, order.indexOf(name));
+  const delay = index * (preset?.text?.stagger ?? 6);
+
   const p = spring({
-    frame: frame - start,
+    frame: frame - delay,
     fps,
-    config: preset.text.spring,
+    config: preset?.text?.spring || { damping: 16, stiffness: 140 },
     durationInFrames: 26,
   });
 
-  const opacity = preset.text.type === "fade" ? p : Math.min(p * 1.2, 1);
+  // Tipi di motion (brand-safe)
+  const type = preset?.text?.type || "slide-up";
+
+  const opacity =
+    type === "fade"
+      ? p
+      : Math.min(1, p * 1.2);
+
   const translateY =
-    preset.text.type.includes("up") ? (1 - p) * fromY : 0;
+    type.includes("up") ? (1 - p) * 32 : 0;
+
+  // Piccolo “overshoot” controllato per slide-up-overshoot
+  const overshoot =
+    type === "slide-up-overshoot"
+      ? interpolate(p, [0, 1], [1.03, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+      : 1;
 
   return (
-    <div style={{ opacity, transform: `translateY(${translateY}px)` }}>
+    <div style={{ opacity, transform: `translateY(${translateY}px) scale(${overshoot})` }}>
       {children}
     </div>
   );
 }
 
-function Wipe({ start, color }) {
-  const frame = useCurrentFrame();
-  const w = interpolate(frame, [start, start + 14], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+function MotionScene({ TemplateComponent, templateProps, motionKey }) {
+  const preset = getPreset(motionKey);
+
+  // Slot renderer: wrappa gli slot con MotionSlotWrapper
+  const renderSlot = useMemo(() => {
+    return (name, children) => (
+      <MotionSlotWrapper name={name} preset={preset}>
+        {children}
+      </MotionSlotWrapper>
+    );
+  }, [preset]);
 
   return (
-    <div
-      style={{
-        height: 6,
-        width: 240,
-        background: color,
-        borderRadius: 999,
-        transformOrigin: "left center",
-        transform: `scaleX(${w})`,
-      }}
-    />
-  );
-}
-
-function Blob({ start, color }) {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  const p = spring({
-    frame: frame - start,
-    fps,
-    config: { damping: 14, stiffness: 120 },
-  });
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        right: -200,
-        top: -200,
-        width: 480,
-        height: 480,
-        borderRadius: "50%",
-        background: color,
-        opacity: p * 0.18,
-        transform: `scale(${0.8 + p * 0.2})`,
-      }}
-    />
-  );
-}
-
-/* =========================
-   Scene
-   ========================= */
-
-function MotionScene({ width, height, palette, content, brand, motionKey }) {
-  const preset = brandMotion[motionKey] || brandMotion.standard;
-
-  const headlineSize = Math.round(width * 0.075);
-  const subSize = Math.round(width * 0.028);
-  const bodySize = Math.round(width * 0.02);
-
-  const start = 0;
-  const stagger = preset.text.stagger;
-
-  return (
-    <AbsoluteFill style={{ background: palette.background, color: palette.headline }}>
-      {preset.graphics.blob && (
-        <Blob start={start + 4} color={palette.accent} />
-      )}
-
-      <div style={{ padding: 56, position: "relative" }}>
-        <div style={{ fontSize: 14, opacity: 0.6 }}>
-          {brand.templateLabel}
-        </div>
-
-        <div style={{ marginTop: 140 }}>
-          <AnimatedText start={start} preset={preset}>
-            <div style={{ fontSize: headlineSize, fontWeight: 700 }}>
-              {content.headline}
-            </div>
-          </AnimatedText>
-
-          <div style={{ marginTop: 14 }}>
-            <AnimatedText start={start + stagger} preset={preset}>
-              <div style={{ fontSize: subSize }}>
-                {content.subheadline}
-              </div>
-            </AnimatedText>
-          </div>
-
-          <div style={{ marginTop: 18, maxWidth: width * 0.7 }}>
-            <AnimatedText start={start + stagger * 2} preset={preset}>
-              <div style={{ fontSize: bodySize }}>
-                {content.body}
-              </div>
-            </AnimatedText>
-          </div>
-
-          {preset.graphics.wipe && (
-            <div style={{ marginTop: 22 }}>
-              <Wipe start={start + stagger} color={palette.accent} />
-            </div>
-          )}
-        </div>
-
-        <div style={{ position: "absolute", left: 56, bottom: 44, opacity: 0.6 }}>
-          <img src={brand.footerLogoSrc} alt="logo" height={14} />
-        </div>
-      </div>
+    <AbsoluteFill style={{ background: "transparent" }}>
+      <SlotProvider renderSlot={renderSlot}>
+        <TemplateComponent {...templateProps} />
+      </SlotProvider>
     </AbsoluteFill>
   );
 }
 
-/* =========================
-   Public component
-   ========================= */
-
 export default function VideoPreview({
-  width,
-  height,
-  palette,
-  content,
-  brand,
-  motionStyle,
+  TemplateComponent,
+  templateProps,
+  motionStyle, // motionKey attaccato al template
 }) {
   const fps = 30;
+  const durationInFrames = 120;
 
-  const Scene = useMemo(
-    () => () => (
-      <MotionScene
-        width={width}
-        height={height}
-        palette={palette}
-        content={content}
-        brand={brand}
-        motionKey={motionStyle}
-      />
-    ),
-    [width, height, palette, content, brand, motionStyle]
-  );
+  const Scene = useMemo(() => {
+    return function SceneComponent() {
+      return (
+        <MotionScene
+          TemplateComponent={TemplateComponent}
+          templateProps={templateProps}
+          motionKey={motionStyle}
+        />
+      );
+    };
+  }, [TemplateComponent, templateProps, motionStyle]);
 
   return (
     <Player
       component={Scene}
-      durationInFrames={120}
-      compositionWidth={width}
-      compositionHeight={height}
+      durationInFrames={durationInFrames}
+      compositionWidth={templateProps.width}
+      compositionHeight={templateProps.height}
       fps={fps}
       autoPlay
       loop
@@ -195,6 +127,7 @@ export default function VideoPreview({
       style={{
         width: "min(980px, 100%)",
         borderRadius: 18,
+        border: "1px solid rgba(0,0,0,0.08)",
         background: "#000",
       }}
     />
