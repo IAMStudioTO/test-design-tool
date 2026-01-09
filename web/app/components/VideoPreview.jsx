@@ -35,7 +35,7 @@ function getPreset(motionKey) {
   );
 }
 
-function MotionWrap({ slotName, index, preset, children }) {
+function MotionWrap({ index, preset, children }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -54,7 +54,10 @@ function MotionWrap({ slotName, index, preset, children }) {
 
   const overshoot =
     type === "slide-up-overshoot"
-      ? interpolate(p, [0, 1], [1.03, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+      ? interpolate(p, [0, 1], [1.03, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })
       : 1;
 
   return (
@@ -71,28 +74,28 @@ function MotionScene({ TemplateComponent, templateProps, motionKey }) {
     throw new Error("VideoPreview: TemplateComponent is undefined/null");
   }
 
-  // Ordine “coerente” per lo stagger
-  const slotOrder = ["meta", "headline", "subheadline", "body", "accent", "logo"];
+  // Ordine per lo stagger (solo elementi “contenuto”)
+  const slotOrder = ["headline", "subheadline", "body", "accent"];
 
-  // ✅ render object che il template usa per wrappare i suoi pezzi
   const render = useMemo(() => {
-    const make = (slotName) => (node) => (
-      <MotionWrap
-        slotName={slotName}
-        index={Math.max(0, slotOrder.indexOf(slotName))}
-        preset={preset}
-      >
+    const makeAnimated = (slotName) => (node) => (
+      <MotionWrap index={Math.max(0, slotOrder.indexOf(slotName))} preset={preset}>
         {node}
       </MotionWrap>
     );
 
+    const identity = (n) => n;
+
     return {
-      meta: make("meta"),
-      headline: make("headline"),
-      subheadline: make("subheadline"),
-      body: make("body"),
-      accent: make("accent"),
-      logo: make("logo"),
+      // ✅ meta e logo NON animati: restano fissi (nessun transform/opacity wrapper)
+      meta: identity,
+      logo: identity,
+
+      // ✅ contenuti animati
+      headline: makeAnimated("headline"),
+      subheadline: makeAnimated("subheadline"),
+      body: makeAnimated("body"),
+      accent: makeAnimated("accent"),
     };
   }, [preset]);
 
