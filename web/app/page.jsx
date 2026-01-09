@@ -9,6 +9,7 @@ import brandMotion from "../../Brand/motion.json";
 
 import ControlPanel from "./components/ControlPanel";
 import { TEMPLATE_LIST, getTemplateById } from "./components/templates";
+import VideoPreview from "./components/VideoPreview";
 
 const HEADLINE_MAX = 40;
 const SUBHEAD_MAX = 90;
@@ -57,32 +58,20 @@ export default function Page() {
   const [templateId, setTemplateId] = useState(TEMPLATE_LIST[0]?.id || "template-01");
   const [formatKey, setFormatKey] = useState(FORMATS[0].key);
 
-  // ✅ SOLO questi 3 sono editabili dall’utente
   const [headline, setHeadline] = useState("Ciao");
   const [subheadline, setSubheadline] = useState("Come stai?");
   const [body, setBody] = useState("Testo corpo opzionale…");
 
-  // ✅ L’utente può scegliere colore (palette)
   const [paletteKey, setPaletteKey] = useState(
     brandConfig?.defaultPalette || paletteKeys[0] || "void"
   );
 
-  // Motion (puoi tenerlo nascosto o mostrarlo più avanti)
-  const [motionKey, setMotionKey] = useState(motionKeys[0] || "void");
+  // motion preset: usato dalla preview video live
+  const [motionKey, setMotionKey] = useState(motionKeys[0] || "default");
+
+  const [previewMode, setPreviewMode] = useState("design"); // design | video
 
   const exportRef = useRef(null);
-
-  // ====== Preview Video ======
-  const [previewMode, setPreviewMode] = useState("design"); // "design" | "video"
-  const [videoPreviewUrl, setVideoPreviewUrl] = useState(""); // object URL
-  const [videoState, setVideoState] = useState({ loading: false, phase: "", error: "" });
-
-  // Pulizia objectURL
-  useEffect(() => {
-    return () => {
-      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-    };
-  }, [videoPreviewUrl]);
 
   const selectedFormat = useMemo(() => {
     return FORMATS.find((f) => f.key === formatKey) || FORMATS[0];
@@ -96,7 +85,7 @@ export default function Page() {
     return getTemplateById(templateId)?.Component;
   }, [templateId]);
 
-  // ===== Responsive preview scale (fit-to-container) =====
+  // Fit-to-container per preview design
   const previewWrapRef = useRef(null);
   const [previewBox, setPreviewBox] = useState({ w: 800, h: 600 });
 
@@ -147,16 +136,13 @@ export default function Page() {
     a.remove();
   }
 
-  async function renderMp4AndGetBlob({ forPreview }) {
-    // stessa pipeline per export e preview
+  async function onExportMp4() {
     const payload = {
       templateId,
       formatKey,
       paletteKey,
       motionStyle: motionKey,
       content: { headline, subheadline, body },
-      // flag “future-proof”: se vuoi, poi lo useremo sul backend per preview più veloce
-      preview: Boolean(forPreview),
     };
 
     const startRes = await fetch(`${RENDER_URL}/render/mp4/start`, {
@@ -170,72 +156,21 @@ export default function Page() {
     const { jobId } = await startRes.json();
     if (!jobId) throw new Error("No jobId returned");
 
-    const startTime = Date.now();
-    const TIMEOUT_MS = 10 * 60 * 1000;
-
     while (true) {
-      if (Date.now() - startTime > TIMEOUT_MS) throw new Error("Timeout MP4 render");
-
       const statusRes = await fetch(`${RENDER_URL}/render/mp4/status/${jobId}`);
-      if (!statusRes.ok) throw new Error(`Status failed (${statusRes.status})`);
-
       const data = await statusRes.json();
       const job = data?.job;
 
-      if (!job) throw new Error("Invalid status payload");
-      if (job.status === "error") throw new Error(job.error || "Render error");
-      if (job.status === "done") break;
-
-      if (forPreview) {
-        setVideoState({ loading: true, phase: job.phase || "working", error: "" });
-      }
-      await new Promise((res) => setTimeout(res, 1200));
+      if (job?.status === "done") break;
+      if (job?.status === "error") throw new Error(job.error || "Render error");
+      await new Promise((r) => setTimeout(r, 1200));
     }
 
     const fileRes = await fetch(`${RENDER_URL}/render/mp4/download/${jobId}`);
     if (!fileRes.ok) throw new Error(`Download failed (${fileRes.status})`);
 
-    return await fileRes.blob();
-  }
-
-  async function onExportMp4() {
-    try {
-      // mantenuto “export classico”
-      const blob = await renderMp4AndGetBlob({ forPreview: false });
-      downloadBlob(blob, `${brandConfig?.id || "brand"}_${templateId}_${formatKey}.mp4`);
-    } catch (e) {
-      // lasciamo error handling sul pannello (se vuoi lo aggiungiamo dopo)
-      alert(e?.message || "MP4 error");
-    }
-  }
-
-  async function onGenerateVideoPreview() {
-    // Genera MP4 e lo mostra nel player
-    setVideoState({ loading: true, phase: "starting", error: "" });
-
-    try {
-      // pulizia vecchia preview
-      if (videoPreviewUrl) {
-        URL.revokeObjectURL(videoPreviewUrl);
-        setVideoPreviewUrl("");
-      }
-
-      const blob = await renderMp4AndGetBlob({ forPreview: true });
-      const url = URL.createObjectURL(blob);
-
-      setVideoPreviewUrl(url);
-      setPreviewMode("video");
-      setVideoState({ loading: false, phase: "", error: "" });
-    } catch (e) {
-      setVideoState({ loading: false, phase: "", error: e?.message || "Preview error" });
-    }
-  }
-
-  function onClearVideoPreview() {
-    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-    setVideoPreviewUrl("");
-    setPreviewMode("design");
-    setVideoState({ loading: false, phase: "", error: "" });
+    const blob = await fileRes.blob();
+    downloadBlob(blob, `${brandConfig?.id || "brand"}_${templateId}_${formatKey}.mp4`);
   }
 
   return (
@@ -244,78 +179,53 @@ export default function Page() {
         <div className="layoutGrid">
           <div className="leftCol">
             <ControlPanel
-              // template + copy
               templates={TEMPLATE_LIST}
               templateId={templateId}
               setTemplateId={setTemplateId}
+              paletteKeys={paletteKeys}
+              paletteKey={paletteKey}
+              setPaletteKey={setPaletteKey}
+              motionKeys={motionKeys}
+              motionKey={motionKey}
+              setMotionKey={setMotionKey}
+              previewMode={previewMode}
+              setPreviewMode={setPreviewMode}
               headline={headline}
               setHeadline={(v) => setHeadline(v.slice(0, HEADLINE_MAX))}
               subheadline={subheadline}
               setSubheadline={(v) => setSubheadline(v.slice(0, SUBHEAD_MAX))}
               body={body}
               setBody={(v) => setBody(v.slice(0, BODY_MAX))}
-
-              // colore
-              paletteKeys={paletteKeys}
-              paletteKey={paletteKey}
-              setPaletteKey={setPaletteKey}
-
-              // export + preview
               onExportPng={onExportPng}
-              onExportMp4={onExportMp4}
-              onGenerateVideoPreview={onGenerateVideoPreview}
-              onClearVideoPreview={onClearVideoPreview}
-              previewMode={previewMode}
-              setPreviewMode={setPreviewMode}
-              videoState={videoState}
-              hasVideoPreview={Boolean(videoPreviewUrl)}
+              onExportMp4={async () => {
+                try {
+                  await onExportMp4();
+                } catch (e) {
+                  alert(e?.message || "MP4 error");
+                }
+              }}
             />
           </div>
 
           <section ref={previewWrapRef} className="rightCol">
             <div className="previewCenter">
-              {/* ====== PREVIEW MODE SWITCH ====== */}
               {previewMode === "video" ? (
                 <div className="videoWrap">
-                  {videoPreviewUrl ? (
-                    <video
-                      src={videoPreviewUrl}
-                      controls
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      style={{
-                        width: "min(980px, 100%)",
-                        borderRadius: 18,
-                        border: "1px solid rgba(0,0,0,0.08)",
-                        background: "#000",
-                      }}
-                    />
-                  ) : (
-                    <div className="videoPlaceholder">
-                      {videoState.loading ? (
-                        <div style={{ fontSize: 14, opacity: 0.8 }}>
-                          Sto generando la preview video… {videoState.phase ? `(${videoState.phase})` : ""}
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 14, opacity: 0.8 }}>
-                          Nessuna preview ancora. Premi “Genera anteprima video”.
-                        </div>
-                      )}
-                      {videoState.error ? (
-                        <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 14 }}>
-                          Errore: {videoState.error}
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
+                  <VideoPreview
+                    width={selectedFormat.width}
+                    height={selectedFormat.height}
+                    palette={palette}
+                    content={{ headline, subheadline, body }}
+                    brand={{
+                      id: brandConfig?.id || "brand",
+                      templateLabel: brandConfig?.templateLabel || "TEMPLATE",
+                      footerLogoSrc: "/brand/logo.svg",
+                    }}
+                    motionStyle={motionKey}
+                  />
                 </div>
               ) : (
-                <div
-                  className="previewScaled"
-                  style={{ transform: `scale(${previewScale})` }}
-                >
+                <div className="previewScaled" style={{ transform: `scale(${previewScale})` }}>
                   {SelectedTemplate ? (
                     <SelectedTemplate
                       width={selectedFormat.width}
@@ -360,77 +270,14 @@ export default function Page() {
       </main>
 
       <style>{`
-        .layoutRoot {
-          max-width: 2200px;
-          margin: 0 auto;
-          padding: 24px;
-        }
-
-        .layoutGrid {
-          display: grid;
-          gap: 24px;
-          grid-template-columns: clamp(360px, 34vw, 720px) minmax(520px, 1fr);
-          align-items: start;
-        }
-
-        .leftCol {
-          position: sticky;
-          top: 16px;
-          align-self: start;
-        }
-
-        .rightCol {
-          height: calc(100svh - 48px);
-          overflow: hidden;
-          display: flex;
-        }
-
-        .previewCenter {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: flex-start;
-          justify-content: center;
-          padding-top: 8px;
-          position: relative;
-        }
-
-        .previewScaled {
-          transform-origin: top center;
-          will-change: transform;
-        }
-
-        .videoWrap {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          justify-content: center;
-          align-items: flex-start;
-          padding: 18px;
-          box-sizing: border-box;
-        }
-
-        .videoPlaceholder {
-          width: min(980px, 100%);
-          border-radius: 18px;
-          border: 1px dashed rgba(0,0,0,0.2);
-          padding: 18px;
-          background: rgba(0,0,0,0.02);
-        }
-
-        @media (max-width: 1100px) {
-          .layoutGrid {
-            grid-template-columns: 1fr;
-          }
-          .leftCol {
-            position: relative;
-            top: auto;
-          }
-          .rightCol {
-            height: auto;
-            min-height: 60svh;
-          }
-        }
+        .layoutRoot { max-width: 2200px; margin: 0 auto; padding: 24px; }
+        .layoutGrid { display: grid; gap: 24px; grid-template-columns: clamp(360px, 34vw, 720px) minmax(520px, 1fr); align-items: start; }
+        .leftCol { position: sticky; top: 16px; align-self: start; }
+        .rightCol { height: calc(100svh - 48px); overflow: hidden; display: flex; }
+        .previewCenter { width: 100%; height: 100%; display: flex; align-items: flex-start; justify-content: center; padding-top: 8px; }
+        .previewScaled { transform-origin: top center; will-change: transform; }
+        .videoWrap { width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-start; padding: 18px; box-sizing: border-box; }
+        @media (max-width: 1100px) { .layoutGrid { grid-template-columns: 1fr; } .leftCol { position: relative; top: auto; } .rightCol { height: auto; min-height: 60svh; } }
       `}</style>
     </>
   );
