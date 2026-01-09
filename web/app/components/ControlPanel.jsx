@@ -16,20 +16,14 @@ export default function ControlPanel({
   paletteKey,
   setPaletteKey,
 
-  motionKeys,
-  motionKey,
-  setMotionKey,
-
   previewMode,
   setPreviewMode,
 
   onExportPng,
   onExportMp4,
 
-  // opzionale: se in futuro vuoi mostrare loading/error MP4
   mp4State,
 }) {
-  // ✅ default “safe” per evitare crash in prerender/build
   const safeMp4State = mp4State || { loading: false, phase: "", error: "" };
 
   return (
@@ -98,19 +92,6 @@ export default function ControlPanel({
         ))}
       </select>
 
-      <label style={labelStyle}>Motion</label>
-      <select
-        value={motionKey}
-        onChange={(e) => setMotionKey(e.target.value)}
-        style={inputStyle}
-      >
-        {motionKeys.map((k) => (
-          <option key={k} value={k}>
-            {k}
-          </option>
-        ))}
-      </select>
-
       <label style={labelStyle}>Heading</label>
       <input
         value={headline}
@@ -150,7 +131,9 @@ export default function ControlPanel({
           cursor: safeMp4State.loading ? "not-allowed" : "pointer",
         }}
       >
-        {safeMp4State.loading ? `Export MP4… ${safeMp4State.phase ? `(${safeMp4State.phase})` : ""}` : "Esporta MP4"}
+        {safeMp4State.loading
+          ? `Export MP4… ${safeMp4State.phase ? `(${safeMp4State.phase})` : ""}`
+          : "Esporta MP4"}
       </button>
 
       {safeMp4State.error ? (
