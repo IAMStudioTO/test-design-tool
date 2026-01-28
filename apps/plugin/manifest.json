@@ -1,0 +1,11 @@
+{
+  "name": "Test Design Tool",
+  "id": "com.iamstudioto.test-design-tool",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["https://test-design-tool.vercel.app"]
+  }
+}
