@@ -1,38 +1,37 @@
 export const runtime = "nodejs";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type"
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: corsHeaders });
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-
     const { projectId, scene } = body;
 
     if (!projectId || !scene) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: "Missing projectId or scene"
-        }),
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ ok: false, error: "Missing projectId or scene" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders }
+      });
     }
 
-    // Per ora non salviamo da nessuna parte (MVP)
-    // Qui in futuro andrà Supabase / storage
     console.log("📦 Received scene for project:", projectId);
-    console.log(scene);
 
-    return Response.json({
-      ok: true,
-      projectId,
-      received: true
+    return new Response(JSON.stringify({ ok: true, projectId, received: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...corsHeaders }
     });
-  } catch (err) {
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: "Invalid JSON payload"
-      }),
-      { status: 400 }
-    );
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: "Invalid JSON payload" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json", ...corsHeaders }
+    });
   }
 }
