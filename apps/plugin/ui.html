@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <style>
       body { font: 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 16px; }
-      button { width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; cursor: pointer; }
+      button { width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; cursor: pointer; margin-bottom: 8px; }
       pre { background: #f6f6f6; padding: 10px; border-radius: 8px; overflow: auto; }
       .row { margin-top: 12px; }
     </style>
@@ -12,7 +12,8 @@
   <body>
     <h3 style="margin: 0 0 12px 0;">Test Design Tool</h3>
 
-    <button id="create">Create project</button>
+    <button id="create">1) Create project</button>
+    <button id="send" disabled>2) Send selected Frame as scene</button>
 
     <div class="row">
       <strong>Response</strong>
@@ -21,16 +22,34 @@
 
     <script>
       const out = document.getElementById("out");
+      const sendBtn = document.getElementById("send");
+      let currentProjectId = null;
+
       document.getElementById("create").onclick = () => {
         parent.postMessage({ pluginMessage: { type: "CREATE_PROJECT" } }, "*");
+      };
+
+      sendBtn.onclick = () => {
+        parent.postMessage(
+          { pluginMessage: { type: "SEND_SCENE", projectId: currentProjectId } },
+          "*"
+        );
       };
 
       onmessage = (event) => {
         const msg = event.data.pluginMessage;
         if (!msg) return;
+
         if (msg.type === "PROJECT_CREATED") {
+          currentProjectId = msg.data?.result?.projectId || msg.data?.projectId || null;
+          out.textContent = JSON.stringify(msg.data, null, 2);
+          sendBtn.disabled = !currentProjectId;
+        }
+
+        if (msg.type === "SCENE_SENT") {
           out.textContent = JSON.stringify(msg.data, null, 2);
         }
+
         if (msg.type === "ERROR") {
           out.textContent = "ERROR: " + msg.error;
         }
