@@ -88,4 +88,23 @@ figma.ui.onmessage = async (msg) => {
   if (msg.type === "SEND_SCENE") {
     try {
       const projectId = msg.projectId;
-      if (!projectId) throw new Error("Missin
+      if (!projectId) throw new Error("Missing projectId (create project first)");
+
+      const sel = figma.currentPage.selection;
+      if (!sel || sel.length !== 1) throw new Error("Select exactly ONE Frame");
+      const node = sel[0];
+      if (node.type !== "FRAME") throw new Error("Selection must be a FRAME");
+
+      const scene = buildSceneFromFrame(node);
+
+      const data = await postJson("https://test-design-tool.vercel.app/api/projects/upload", {
+        projectId,
+        scene
+      });
+
+      figma.ui.postMessage({ type: "SCENE_SENT", data });
+    } catch (e) {
+      figma.ui.postMessage({ type: "ERROR", error: String(e && e.message ? e.message : e) });
+    }
+  }
+};
