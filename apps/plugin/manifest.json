@@ -6,6 +6,9 @@
   "ui": "ui.html",
   "editorType": ["figma"],
   "networkAccess": {
-    "allowedDomains": ["https://test-design-tool.vercel.app"]
+    "allowedDomains": [
+      "https://test-design-tool.vercel.app",
+      "https://test-design-tool.vercel.app/"
+    ]
   }
 }
